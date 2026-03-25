@@ -260,32 +260,20 @@ async function sendPayout(walletAddress, amount) {
   const agentAddress = "0x1ef1034e7cd690b40a329bd64209ce563f95bb5c"
   
   try {
-    // 1. Initial check: Does agent have enough USDC?
-    const balanceResult = await runOnchainos(`wallet balance --chain 196 --token-address "${usdcAddress}"`)
+    // 1. Initial check: Does agent have enough USDC? Use direct RPC to be session-independent
+    console.log(`📡 Checking Agent Wallet (${agentAddress}) balance for payout...`)
     
-    let agentBalance = 0;
-    if (balanceResult && balanceResult.details) {
-      // Find the account matching the agentAddress
-      const detailsArray = Array.isArray(balanceResult.details) 
-        ? balanceResult.details 
-        : Object.values(balanceResult.details);
+    // Contract setup for USDC
+    const usdcContract = new ethers.Contract(usdcAddress, [
+      'function balanceOf(address) view returns (uint256)',
+      'function decimals() view returns (uint8)'
+    ], provider)
 
-      const foundAccount = detailsArray.find(acc => 
-        acc.tokenAssets && acc.tokenAssets.some(t => t.address.toLowerCase() === agentAddress.toLowerCase())
-      );
-
-      if (foundAccount) {
-        // Find the USDC asset specifically - check multiple possible property names
-        const tokenAsset = foundAccount.tokenAssets.find(t => {
-           const addr = (t.tokenAddress || t.tokenContractAddress || "").toLowerCase();
-           return addr === usdcAddress.toLowerCase() || t.symbol === 'USDC';
-        });
-        if (tokenAsset) {
-          agentBalance = parseFloat(tokenAsset.balance || 0);
-          console.log(`📡 Agent Wallet detected: ${agentBalance} USDC in account ${foundAccount.accountName || foundAccount.accountId}`);
-        }
-      }
-    }
+    // Call balanceOf(agentAddress)
+    const agentBalanceRaw = await usdcContract.balanceOf(agentAddress)
+    const agentBalance = parseFloat(ethers.formatUnits(agentBalanceRaw, 6)) // USDC is 6 decimals
+    
+    console.log(`   Agent Balance: ${agentBalance} USDC`)
 
     if (agentBalance < parseFloat(amount)) {
       console.error(`INSUFFICIENT FUNDS: Agent has ${agentBalance} USDC, but this reward requires ${amount} USDC.`);
