@@ -70,11 +70,7 @@ function App() {
         <h2 style={{ fontSize: '1.75rem', marginBottom: '2.5rem', textAlign: 'center', opacity: 0.9 }}>
           Onchain Marketplace
         </h2>
-        <div className="bounty-grid" style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(3, 1fr)', 
-          gap: '2.5rem' 
-        }}>
+        <div className="bounty-grid">
           {bounties.slice(0, 9).map(bounty => (
             <BountyCard key={bounty.id} bounty={bounty} />
           ))}

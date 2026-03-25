@@ -58,7 +58,11 @@ const BountyDetail = ({ connectedAddress, API_URL }) => {
         <ArrowLeft size={16} /> Back to Hub
       </button>
 
-      <div className="bounty-detail-grid" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '3rem' }}>
+      <div className="bounty-detail-grid" style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 400px), 1fr))', 
+        gap: '2.5rem' 
+      }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
             <span className={`difficulty-tag ${bounty.difficulty.toLowerCase()}`}>{bounty.difficulty}</span>

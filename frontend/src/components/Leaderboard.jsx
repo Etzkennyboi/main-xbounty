@@ -15,7 +15,7 @@ const Leaderboard = ({ API_URL }) => {
   return (
     <div className="app-container">
       <div style={{ textAlign: 'center', marginBottom: '4rem' }}>
-        <h1 style={{ fontSize: '3rem', marginBottom: '1rem' }}>Global Rankings</h1>
+        <h1 style={{ fontSize: 'clamp(2rem, 5vw, 3rem)', marginBottom: '1rem' }}>Global Rankings</h1>
         <p style={{ color: 'var(--text-secondary)' }}>The most active onchain agents in the XBounty ecosystem.</p>
       </div>
 
