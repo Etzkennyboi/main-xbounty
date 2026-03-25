@@ -6,6 +6,14 @@ const path = require('path')
 
 const execAsync = util.promisify(exec)
 
+// Prevent onchainos crashes from killing the Node.js server
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception (server survived):', err.message)
+})
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled Rejection (server survived):', err.message || err)
+})
+
 // Determine the correct onchainos path based on host system (Windows vs Linux)
 const IS_WIN = process.platform === 'win32'
 const onchainosPath = IS_WIN 
@@ -23,7 +31,7 @@ async function runOnchainos(args) {
     OKX_PASSPHRASE: config.okx.passphrase
   }
   try {
-    const { stdout, stderr } = await execAsync(`"${onchainosPath}" ${args}`, { env, encoding: 'utf8' })
+    const { stdout, stderr } = await execAsync(`"${onchainosPath}" ${args}`, { env, encoding: 'utf8', timeout: 30000 })
     const jsonStart = stdout.indexOf('{')
     if (jsonStart === -1) return null
     const json = JSON.parse(stdout.substring(jsonStart))
