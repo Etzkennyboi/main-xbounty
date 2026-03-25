@@ -18,7 +18,7 @@ const paymentGateway = (req, res, next) => {
     return res.status(402).json({
       success: false,
       message: '402 Payment Required',
-      recipient: config.agent.walletAddress,
+      recipient: "0x1ef1034e7cd690b40a329bd64209ce563f95bb5c",
       amount: 0.0002,
       token: 'OKB'
     });

@@ -257,7 +257,7 @@ async function verifyBalance(walletAddress, bounty) {
 
 async function sendPayout(walletAddress, amount) {
   const usdcAddress = "0x74b7f16337b8972027f6196a17a631ac6de26d22" // X Layer Mainnet USDC
-  const agentAddress = config.agent.walletAddress
+  const agentAddress = "0x1ef1034e7cd690b40a329bd64209ce563f95bb5c"
   
   try {
     // 1. Initial check: Does agent have enough USDC?
