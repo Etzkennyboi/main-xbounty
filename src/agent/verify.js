@@ -35,16 +35,22 @@ async function runOnchainos(args) {
     OKX_API_KEY: config.okx.apiKey,
     OKX_SECRET_KEY: config.okx.secretKey,
     OKX_PASSPHRASE: config.okx.passphrase,
-    // Disable secure storage for headless/Docker environments (trying all variations)
+    // Disable secure storage for headless/Docker/Railway (exhaustive list of possible flags)
     OKXWEB3_SECURE_STORAGE_DISABLED: "1",
+    OKXWEB3_KEYRING_STRATEGY: "plain",
+    OKXWEB3_STORAGE_STRATEGY: "plain",
+    OKXWEB3_KEYRING_STORAGE_STRATEGY: "plain",
+    OKXWEB3_STORAGE_TYPE: "file",
+    OKXWEB3_SECURE_STORAGE: "false",
+    OKX_SECURE_STORAGE_DISABLED: "1",
     ONCHAINOS_SECURE_STORAGE_DISABLED: "1",
     SECURE_STORAGE_DISABLED: "1",
+    SECURE_STORAGE: "false",
+    STORAGE_STRATEGY: "plain",
     OKXWEB3_USE_FILE_KEYRING: "true",
-    OKXWEB3_STORAGE_TYPE: "file",
-    OKXWEB3_KEYRING_STRATEGY: "file", // Native Rust module Strategy
-    OKXWEB3_KEYRING_STORE: "file",
     OKXWEB3_HOME: "/tmp/.onchainos",
-    HOME: "/tmp", // Force simple file home
+    XKO_SECURE_STORAGE_DISABLED: "1", // Some older builds used this
+    HOME: "/tmp",
     XDG_CONFIG_HOME: "/tmp/.config",
     XDG_DATA_HOME: "/tmp/.local/share",
     XDG_RUNTIME_DIR: "/tmp",
