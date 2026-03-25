@@ -65,7 +65,11 @@ async function runOnchainos(args) {
   }
   try {
     console.log(`📡 OnchainOS [${onchainosPath}] Running args: ${args.substring(0, 100)}...`)
-    const { stdout, stderr } = await execAsync(`"${onchainosPath}" ${args}`, { env, encoding: 'utf8', timeout: 120000 })
+    
+    // Use dbus-run-session on Linux to provide a private bus for the keyring libraries
+    const cmd = IS_WIN ? `"${onchainosPath}" ${args}` : `dbus-run-session -- "${onchainosPath}" ${args}`
+    
+    const { stdout, stderr } = await execAsync(cmd, { env, encoding: 'utf8', timeout: 120000 })
     const jsonStart = stdout.indexOf('{')
     if (jsonStart === -1) return null
     const json = JSON.parse(stdout.substring(jsonStart))
