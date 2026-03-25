@@ -40,15 +40,18 @@ async function runOnchainos(args) {
     }
     return json.data
   } catch (error) {
+    const stderrMsg = error.stderr || '';
+    const stdoutMsg = error.stdout || '';
     console.error(`OnchainOS Execution Error:`, error.message)
+    if (stderrMsg) console.error(`OnchainOS Stderr:`, stderrMsg)
     try {
-       const jsonStart = error.stdout?.indexOf('{') ?? -1;
+       const jsonStart = stdoutMsg.indexOf('{');
        if (jsonStart !== -1) {
-          const json = JSON.parse(error.stdout.substring(jsonStart));
-          return { _error: json.message || error.message, _json: json };
+          const json = JSON.parse(stdoutMsg.substring(jsonStart));
+          return { _error: json.message || stderrMsg || error.message, _json: json };
        }
     } catch (e) {}
-    return null
+    return { _error: stderrMsg || error.message }
   }
 }
 
