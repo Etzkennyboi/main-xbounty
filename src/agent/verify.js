@@ -41,6 +41,8 @@ async function runOnchainos(args) {
     SECURE_STORAGE_DISABLED: "1",
     OKXWEB3_USE_FILE_KEYRING: "true",
     OKXWEB3_STORAGE_TYPE: "file",
+    OKXWEB3_KEYRING_STRATEGY: "file", // Native Rust module Strategy
+    OKXWEB3_KEYRING_STORE: "file",
     OKXWEB3_HOME: "/tmp/.onchainos",
     HOME: "/tmp", // Force simple file home
     XDG_CONFIG_HOME: "/tmp/.config",
