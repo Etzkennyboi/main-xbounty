@@ -1,0 +1,65 @@
+﻿{
+  "ok": true,
+  "data": {
+    "details": {
+      "56d70645-7dff-40cd-a9a2-b939e5884529": {
+        "data": [
+          {
+            "accountId": "56d70645-7dff-40cd-a9a2-b939e5884529",
+            "tokenAssets": [
+              {
+                "absSpendingPendingBalance": "0",
+                "activeBuy": false,
+                "address": "0x1ef1034e7cd690b40a329bd64209ce563f95bb5c",
+                "balance": "0.19",
+                "chainIndex": "196",
+                "decimal": "6",
+                "priceChangeRate24H": "-0.0000300039",
+                "rawBalance": "190000",
+                "receivedPendingBalance": "0",
+                "spendingPendingBalance": "0",
+                "symbol": "USDΓé«0",
+                "tokenAddress": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+                "tokenName": "USDΓé«0",
+                "tokenPrice": "0.99984",
+                "tokenType": "1",
+                "usdValue": "0.1899696"
+              },
+              {
+                "absSpendingPendingBalance": "0",
+                "activeBuy": false,
+                "address": "0x1ef1034e7cd690b40a329bd64209ce563f95bb5c",
+                "balance": "0.00211731581417175",
+                "chainIndex": "196",
+                "decimal": "18",
+                "priceChangeRate24H": "-0.0439572794",
+                "rawBalance": "2117315814171750",
+                "receivedPendingBalance": "0",
+                "spendingPendingBalance": "0",
+                "symbol": "OKB",
+                "tokenAddress": "",
+                "tokenName": "X Layer",
+                "tokenPrice": "85.04",
+                "tokenType": "1",
+                "usdValue": "0.18005653"
+              }
+            ]
+          }
+        ],
+        "total_value_usd": "0.37",
+        "updated_at": 1774402081
+      },
+      "81bf4c60-4ecb-47d5-a768-cd78e7ea7788": {
+        "data": [
+          {
+            "accountId": "81bf4c60-4ecb-47d5-a768-cd78e7ea7788",
+            "tokenAssets": []
+          }
+        ],
+        "total_value_usd": "0.00",
+        "updated_at": 1774402081
+      }
+    },
+    "totalValueUsd": "0.37"
+  }
+}

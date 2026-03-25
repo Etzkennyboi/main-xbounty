@@ -23,11 +23,15 @@ async function runOnchainos(args) {
     OKX_PASSPHRASE: config.okx.passphrase
   }
   try {
-    const { stdout } = await execAsync(`"${onchainosPath}" ${args}`, { env, encoding: 'utf8' })
+    const { stdout, stderr } = await execAsync(`"${onchainosPath}" ${args}`, { env, encoding: 'utf8' })
+    if (stderr) console.error(`OnchainOS Stderr: ${stderr}`)
     const jsonStart = stdout.indexOf('{')
     if (jsonStart === -1) return null
     return JSON.parse(stdout.substring(jsonStart)).data
   } catch (error) {
+    console.error(`OnchainOS Execution Error:`, error.message)
+    if (error.stdout) console.log(`Stdout: ${error.stdout}`)
+    if (error.stderr) console.log(`Stderr: ${error.stderr}`)
     return null
   }
 }
@@ -233,13 +237,32 @@ async function verifyBalance(walletAddress, bounty) {
 
 async function sendPayout(walletAddress, amount) {
   const usdcAddress = "0x74b7f16337b8972027f6196a17a631ac6de26d22" // X Layer Mainnet USDC
+  const agentAddress = config.agent.walletAddress
+  
   try {
-    // Adding --from config.agent.walletAddress ensures we use the funded wallet
-    const agentAddress = config.agent.walletAddress
+    // 1. Initial check: Does agent have enough USDC?
+    const balanceResult = await runOnchainos(`wallet balance --chain 196 --token-address "${usdcAddress}"`)
+    let agentBalance = 0
+    if (balanceResult && balanceResult.details && balanceResult.details[0] && balanceResult.details[0].tokenAssets[0]) {
+      agentBalance = parseFloat(balanceResult.details[0].tokenAssets[0].balance || 0)
+    }
+
+    if (agentBalance < parseFloat(amount)) {
+      console.error(`INSUFFICIENT FUNDS: Agent has ${agentBalance} USDC, needs ${amount} USDC.`)
+      return { success: false, error: 'INSUFFICIENT_FUNDS', balance: agentBalance, needed: amount }
+    }
+
+    // 2. Perform Send
+    console.log(`Executing payout: onchainos wallet send --chain 196 --amount "${amount}" --receipt "${walletAddress}" --contract-token "${usdcAddress}" --from "${agentAddress}" --force`)
     const result = await runOnchainos(`wallet send --chain 196 --amount "${amount}" --receipt "${walletAddress}" --contract-token "${usdcAddress}" --from "${agentAddress}" --force`)
-    return result && result.txHash ? result.txHash : null
+    if (result && result.txHash) {
+      return { success: true, txHash: result.txHash }
+    }
+    
+    return { success: false, error: 'EXECUTION_REVERTED' }
   } catch (err) {
-    return null
+    console.error('Payout process crashed:', err.message)
+    return { success: false, error: 'SYSTEM_ERROR' }
   }
 }
 

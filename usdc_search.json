@@ -1,0 +1,22 @@
+﻿{
+  "ok": true,
+  "data": [
+    {
+      "chainIndex": "196",
+      "change": "-0.07",
+      "decimal": "6",
+      "explorerUrl": "https://web3.okx.com/explorer/x-layer/token/0x74b7f16337b8972027f6196a17a631ac6de26d22",
+      "holders": "131824",
+      "liquidity": "1180790.14834830885902401552",
+      "marketCap": "7963149.086064402554586571",
+      "price": "0.999544255922379032",
+      "tagList": {
+        "communityRecognized": true
+      },
+      "tokenContractAddress": "0x74b7f16337b8972027f6196a17a631ac6de26d22",
+      "tokenLogoUrl": "https://static.oklink.com/cdn/web3/currency/token/large/637-0xbae207659db88bea0cbead6da0ed00aac12edcdda169e591cd41c94180b46f3b-110/type=default_90_0?v=1770358503852",
+      "tokenName": "USD Coin",
+      "tokenSymbol": "USDC"
+    }
+  ]
+}

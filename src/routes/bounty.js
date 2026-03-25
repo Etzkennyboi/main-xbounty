@@ -72,8 +72,18 @@ router.post('/submit', async (req, res) => {
       db.updateBountyClaim(bountyId)
       
       // Trigger payout
-      const payoutTxHash = await sendPayout(walletAddress, bounty.reward)
-      submission.payoutTx = payoutTxHash || 'PAYOUT_FAILED'
+      console.log(`PASS verdict. Sending ${bounty.reward} USDC reward to ${walletAddress}...`)
+      const payout = await sendPayout(walletAddress, bounty.reward)
+      
+      if (payout.success) {
+        submission.payoutTx = payout.txHash
+      } else {
+        submission.payoutTx = 'PAYOUT_FAILED'
+        submission.error = payout.error
+        submission.agentBalance = payout.balance
+        submission.neededAmount = payout.needed
+        console.error(`CRITICAL: Payout of ${bounty.reward} USDC failed. Error: ${payout.error}`)
+      }
     }
 
     db.addSubmission(submission)

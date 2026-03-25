@@ -40,7 +40,7 @@ const BountyDetail = ({ connectedAddress, API_URL }) => {
       const result = await response.json();
 
       if (result.success && result.verdict === 'PASS') {
-        setStatus({ type: 'success', msg: result.reason });
+        setStatus({ type: 'success', msg: result.reason, submission: result.submission });
         setPayoutTx(result.submission.payoutTx);
       } else {
         setStatus({ type: 'error', msg: result.message || result.reason });
@@ -123,7 +123,11 @@ const BountyDetail = ({ connectedAddress, API_URL }) => {
                       </a>
                     ) : payoutTx === 'PAYOUT_FAILED' ? (
                       <div style={{ color: '#ff4444', fontSize: '0.9rem', marginTop: '0.5rem', fontWeight: 'normal' }}>
-                        Agent Wallet is empty! Verification passed, but the automated USDC payout reverted. Please fund the Agent wallet with USDC and OKB (gas).
+                         {status.submission?.error === 'INSUFFICIENT_FUNDS' ? (
+                           <>Agent Wallet Balance: {status.submission.agentBalance} USDC. Reward: {status.submission.neededAmount} USDC. Please top up the Agent Wallet.</>
+                         ) : (
+                           <>Verification passed, but the automated USDC payout failed (Agent balance or gas issue). Please contact support.</>
+                         )}
                       </div>
                     ) : null}
                   </div>
