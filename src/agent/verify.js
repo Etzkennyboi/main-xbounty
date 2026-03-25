@@ -31,7 +31,7 @@ async function runOnchainos(args) {
     OKX_PASSPHRASE: config.okx.passphrase
   }
   try {
-    const { stdout, stderr } = await execAsync(`"${onchainosPath}" ${args}`, { env, encoding: 'utf8', timeout: 30000 })
+    const { stdout, stderr } = await execAsync(`"${onchainosPath}" ${args}`, { env, encoding: 'utf8', timeout: 120000 })
     const jsonStart = stdout.indexOf('{')
     if (jsonStart === -1) return null
     const json = JSON.parse(stdout.substring(jsonStart))
@@ -292,8 +292,8 @@ async function sendPayout(walletAddress, amount) {
     }
 
     // 2. Perform Send
-    console.log(`Executing payout: onchainos wallet send --chain 196 --amount "${amount}" --receipt "${walletAddress}" --contract-token "${usdcAddress}" --from "${agentAddress}" --force`)
-    const result = await runOnchainos(`wallet send --chain 196 --amount "${amount}" --receipt "${walletAddress}" --contract-token "${usdcAddress}" --from "${agentAddress}" --force`)
+    console.log(`Executing payout: onchainos wallet send --chain 196 --amt "${amount}" --receipt "${walletAddress}" --contract-token "${usdcAddress}" --from "${agentAddress}" --force`)
+    const result = await runOnchainos(`wallet send --chain 196 --amt "${amount}" --receipt "${walletAddress}" --contract-token "${usdcAddress}" --from "${agentAddress}" --force`)
     
     if (result && result.txHash) {
       return { success: true, txHash: result.txHash }
