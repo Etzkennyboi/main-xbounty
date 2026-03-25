@@ -125,6 +125,8 @@ const BountyDetail = ({ connectedAddress, API_URL }) => {
                       <div style={{ color: '#ff4444', fontSize: '0.9rem', marginTop: '0.5rem', fontWeight: 'normal' }}>
                          {status.submission?.error === 'INSUFFICIENT_FUNDS' ? (
                            <>Agent Wallet Balance: {status.submission.agentBalance} USDC. Reward: {status.submission.neededAmount} USDC. Please top up the Agent Wallet.</>
+                         ) : status.submission?.message ? (
+                            <>Agent Wallet Error: {status.submission.message}</>
                          ) : (
                            <>Verification passed, but the automated USDC payout failed (Agent balance or gas issue). Please contact support.</>
                          )}

@@ -24,14 +24,22 @@ async function runOnchainos(args) {
   }
   try {
     const { stdout, stderr } = await execAsync(`"${onchainosPath}" ${args}`, { env, encoding: 'utf8' })
-    if (stderr) console.error(`OnchainOS Stderr: ${stderr}`)
     const jsonStart = stdout.indexOf('{')
     if (jsonStart === -1) return null
-    return JSON.parse(stdout.substring(jsonStart)).data
+    const json = JSON.parse(stdout.substring(jsonStart))
+    if (!json.ok && json.message) {
+      return { _error: json.message, _json: json }
+    }
+    return json.data
   } catch (error) {
     console.error(`OnchainOS Execution Error:`, error.message)
-    if (error.stdout) console.log(`Stdout: ${error.stdout}`)
-    if (error.stderr) console.log(`Stderr: ${error.stderr}`)
+    try {
+       const jsonStart = error.stdout?.indexOf('{') ?? -1;
+       if (jsonStart !== -1) {
+          const json = JSON.parse(error.stdout.substring(jsonStart));
+          return { _error: json.message || error.message, _json: json };
+       }
+    } catch (e) {}
     return null
   }
 }
@@ -242,21 +250,48 @@ async function sendPayout(walletAddress, amount) {
   try {
     // 1. Initial check: Does agent have enough USDC?
     const balanceResult = await runOnchainos(`wallet balance --chain 196 --token-address "${usdcAddress}"`)
-    let agentBalance = 0
-    if (balanceResult && balanceResult.details && balanceResult.details[0] && balanceResult.details[0].tokenAssets[0]) {
-      agentBalance = parseFloat(balanceResult.details[0].tokenAssets[0].balance || 0)
+    
+    let agentBalance = 0;
+    if (balanceResult && balanceResult.details) {
+      // Find the account matching the agentAddress
+      const detailsArray = Array.isArray(balanceResult.details) 
+        ? balanceResult.details 
+        : Object.values(balanceResult.details);
+
+      const foundAccount = detailsArray.find(acc => 
+        acc.tokenAssets && acc.tokenAssets.some(t => t.address.toLowerCase() === agentAddress.toLowerCase())
+      );
+
+      if (foundAccount) {
+        // Find the USDC asset specifically - check multiple possible property names
+        const tokenAsset = foundAccount.tokenAssets.find(t => {
+           const addr = (t.tokenAddress || t.tokenContractAddress || "").toLowerCase();
+           return addr === usdcAddress.toLowerCase() || t.symbol === 'USDC';
+        });
+        if (tokenAsset) {
+          agentBalance = parseFloat(tokenAsset.balance || 0);
+          console.log(`📡 Agent Wallet detected: ${agentBalance} USDC in account ${foundAccount.accountName || foundAccount.accountId}`);
+        }
+      }
     }
 
     if (agentBalance < parseFloat(amount)) {
-      console.error(`INSUFFICIENT FUNDS: Agent has ${agentBalance} USDC, needs ${amount} USDC.`)
+      console.error(`INSUFFICIENT FUNDS: Agent has ${agentBalance} USDC, but this reward requires ${amount} USDC.`);
       return { success: false, error: 'INSUFFICIENT_FUNDS', balance: agentBalance, needed: amount }
     }
 
     // 2. Perform Send
     console.log(`Executing payout: onchainos wallet send --chain 196 --amount "${amount}" --receipt "${walletAddress}" --contract-token "${usdcAddress}" --from "${agentAddress}" --force`)
     const result = await runOnchainos(`wallet send --chain 196 --amount "${amount}" --receipt "${walletAddress}" --contract-token "${usdcAddress}" --from "${agentAddress}" --force`)
+    
     if (result && result.txHash) {
       return { success: true, txHash: result.txHash }
+    }
+    
+    // Explicitly check for simulation/execution error from runOnchainos
+    if (result && result._error) {
+       console.error(`PAYOUT REVERTED: ${result._error}`);
+       return { success: false, error: 'EXECUTION_REVERTED', message: result._error };
     }
     
     return { success: false, error: 'EXECUTION_REVERTED' }

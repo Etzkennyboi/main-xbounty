@@ -1,0 +1,29 @@
+﻿{
+  "ok": true,
+  "data": {
+    "details": [
+      {
+        "tokenAssets": [
+          {
+            "absSpendingPendingBalance": "0",
+            "activeBuy": false,
+            "address": "0x1ef1034e7cd690b40a329bd64209ce563f95bb5c",
+            "balance": "0.23",
+            "chainIndex": "196",
+            "decimal": "6",
+            "priceChangeRate24H": "0.0000300021",
+            "rawBalance": "230000",
+            "receivedPendingBalance": "0",
+            "spendingPendingBalance": "0",
+            "symbol": "USDC",
+            "tokenAddress": "0x74b7f16337b8972027f6196a17a631ac6de26d22",
+            "tokenName": "USD Coin",
+            "tokenPrice": "0.99996",
+            "tokenType": "1",
+            "usdValue": "0.2299908"
+          }
+        ]
+      }
+    ]
+  }
+}

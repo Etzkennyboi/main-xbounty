@@ -80,9 +80,10 @@ router.post('/submit', async (req, res) => {
       } else {
         submission.payoutTx = 'PAYOUT_FAILED'
         submission.error = payout.error
+        submission.message = payout.message // Add the detailed error message
         submission.agentBalance = payout.balance
         submission.neededAmount = payout.needed
-        console.error(`CRITICAL: Payout of ${bounty.reward} USDC failed. Error: ${payout.error}`)
+        console.error(`CRITICAL: Payout of ${bounty.reward} USDC failed. Error: ${payout.error} - ${payout.message || ''}`)
       }
     }
 
