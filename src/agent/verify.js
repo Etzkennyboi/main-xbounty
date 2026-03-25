@@ -34,7 +34,8 @@ async function runOnchainos(args) {
     ...process.env,
     OKX_API_KEY: config.okx.apiKey,
     OKX_SECRET_KEY: config.okx.secretKey,
-    OKX_PASSPHRASE: config.okx.passphrase
+    OKX_PASSPHRASE: config.okx.passphrase,
+    OKXWEB3_SECURE_STORAGE_DISABLED: "1" // Bypass Platform secure storage issue in Docker
   }
   try {
     console.log(`📡 OnchainOS [${onchainosPath}] Running args: ${args.substring(0, 100)}...`)
