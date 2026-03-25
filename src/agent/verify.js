@@ -30,59 +30,20 @@ console.log(`📡 OnchainOS initialized on ${process.platform}. Binary path: ${o
 const provider = new ethers.JsonRpcProvider('https://rpc.xlayer.tech')
 
 async function runOnchainos(args) {
-  const runtimeDir = path.join('/tmp', `runtime-node-${Date.now()}`)
-  try {
-     const fs = require('fs')
-     if (!fs.existsSync(runtimeDir)) {
-       fs.mkdirSync(runtimeDir, { recursive: true, mode: 0o700 })
-     }
-  } catch (e) {}
-
   const env = { 
     ...process.env,
     OKX_API_KEY: config.okx.apiKey,
     OKX_SECRET_KEY: config.okx.secretKey,
-    OKX_PASSPHRASE: config.okx.passphrase,
-    // Disable secure storage for headless/Docker/Railway (exhaustive legacy & new list)
-    OKXWEB3_SECURE_STORAGE_DISABLED: "1",
-    OKXWEB3_KEYRING_STRATEGY: "none",
-    OKXWEB3_STORAGE_STRATEGY: "none",
-    OKXWEB3_KEYRING_BACKEND: "file",
-    OKXWEB3_STORAGE_BACKEND: "file",
-    OKXWEB3_SECURE_STORAGE_NONE: "1",
-    OKXWEB3_KEYRING_STORAGE_STRATEGY: "none",
-    OKXWEB3_STORAGE_TYPE: "file",
-    OKXWEB3_SECURE_STORAGE: "false",
-    OKXWEB3_KEYRING_STORE: "memory",
-    OKXWEB3_SESSION_PERSISTENCE_DISABLED: "1",
-    OKX_AGENTIC_SESSION_BYPASS: "true",
-    OKX_SECURE_STORAGE_DISABLED: "1",
-    ONCHAINOS_SECURE_STORAGE_DISABLED: "1",
-    SECURE_STORAGE_DISABLED: "1",
-    SECURE_STORAGE: "false",
-    STORAGE_STRATEGY: "none",
-    OKXWEB3_USE_FILE_KEYRING: "true",
-    OKXWEB3_HOME: "/tmp/.onchainos",
-    XKO_SECURE_STORAGE_DISABLED: "1",
-    OKXWEB3_KEYRING_PASSWORD: "agentic-payout-secret",
-    HOME: "/tmp",
-    XDG_CONFIG_HOME: "/tmp/.config",
-    XDG_DATA_HOME: "/tmp/.local/share",
-    XDG_RUNTIME_DIR: runtimeDir,
-    DBUS_SESSION_BUS_ADDRESS: "/dev/null" // Discourage trying to use system dbus-based keyrings
+    OKX_PASSPHRASE: config.okx.passphrase
   }
   try {
-    console.log(`📡 OnchainOS [${onchainosPath}] Running args: ${args.substring(0, 100)}...`)
-    
-    // Use dbus-run-session on Linux to provide a private bus for the keyring libraries
-    const cmd = IS_WIN ? `"${onchainosPath}" ${args}` : `dbus-run-session -- "${onchainosPath}" ${args}`
-    
-    const { stdout, stderr } = await execAsync(cmd, { env, encoding: 'utf8', timeout: 120000 })
+    console.log(`📡 OnchainOS [${onchainosPath}] Running: ${args.substring(0, 120)}...`)
+    const { stdout, stderr } = await execAsync(`"${onchainosPath}" ${args}`, { env, encoding: 'utf8', timeout: 120000 })
     const jsonStart = stdout.indexOf('{')
     if (jsonStart === -1) return null
     const json = JSON.parse(stdout.substring(jsonStart))
-    if (!json.ok && json.message) {
-      return { _error: json.message, _json: json }
+    if (!json.ok && (json.message || json.error)) {
+      return { _error: json.message || json.error, _json: json }
     }
     return json.data
   } catch (error) {
@@ -96,7 +57,7 @@ async function runOnchainos(args) {
        const jsonStart = stdoutMsg.indexOf('{');
        if (jsonStart !== -1) {
           const json = JSON.parse(stdoutMsg.substring(jsonStart));
-          return { _error: json.message || json.error || stderrMsg || stdoutMsg || error.message, _json: json };
+          return { _error: json.message || json.error || stderrMsg || error.message, _json: json };
        }
     } catch (e) {}
     return { _error: stderrMsg || stdoutMsg || error.message }
