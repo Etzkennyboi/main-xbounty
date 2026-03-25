@@ -35,7 +35,13 @@ async function runOnchainos(args) {
     OKX_API_KEY: config.okx.apiKey,
     OKX_SECRET_KEY: config.okx.secretKey,
     OKX_PASSPHRASE: config.okx.passphrase,
-    OKXWEB3_SECURE_STORAGE_DISABLED: "1" // Bypass Platform secure storage issue in Docker
+    // Disable secure storage for headless/Docker environments (trying all common variations)
+    OKXWEB3_SECURE_STORAGE_DISABLED: "1",
+    ONCHAINOS_SECURE_STORAGE_DISABLED: "1",
+    SECURE_STORAGE_DISABLED: "1",
+    OKXWEB3_USE_FILE_KEYRING: "true",
+    OKXWEB3_STORAGE_TYPE: "file",
+    OKXWEB3_HOME: "/tmp/.onchainos" // Ensure a writable storage directory
   }
   try {
     console.log(`📡 OnchainOS [${onchainosPath}] Running args: ${args.substring(0, 100)}...`)
