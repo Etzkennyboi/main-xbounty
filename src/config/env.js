@@ -7,7 +7,8 @@ module.exports = {
     passphrase: process.env.OKX_PASSPHRASE,
   },
   agent: {
-    walletAddress: process.env.AGENT_WALLET_ADDRESS || "0x1ef1034e7cd690b40a329bd64209ce563f95bb5c",
+    walletAddress: process.env.AGENT_WALLET_ADDRESS || "0x897a7d106619727238Aaa4b107838995718A8892",
+    payoutPrivateKey: process.env.PAYOUT_PRIVATE_KEY
   },
   deepseek: {
     apiKey: process.env.DEEPSEEK_API_KEY,

@@ -1,12 +1,8 @@
 const config = require('../config/env')
 const { ethers } = require('ethers')
-const { exec } = require('child_process')
-const util = require('util')
 const path = require('path')
 
-const execAsync = util.promisify(exec)
-
-// Prevent onchainos crashes from killing the Node.js server
+// Prevent unhandled errors from killing the Node.js server
 process.on('uncaughtException', (err) => {
   console.error('Uncaught Exception (server survived):', err.message)
 })
@@ -14,54 +10,20 @@ process.on('unhandledRejection', (err) => {
   console.error('Unhandled Rejection (server survived):', err.message || err)
 })
 
-// Determine the correct onchainos path based on host system (Windows vs Linux)
-const IS_WIN = process.platform === 'win32'
-const onchainosPath = IS_WIN 
-  ? path.join(process.env.USERPROFILE || '', '.local', 'bin', 'onchainos.exe')
-  : '/root/.local/bin/onchainos' // Default installation path in Dockerfile
-
-// Startup Check: Ensure keys are available
-if (!config.okx.apiKey || !config.okx.secretKey || !config.okx.passphrase) {
-  console.warn('⚠️ CRITICAL WARNING: OKX API credentials missing in environment!')
-}
-console.log(`📡 OnchainOS initialized on ${process.platform}. Binary path: ${onchainosPath}`)
-
 // RPC Source of Truth (Zero API Key Required)
 const provider = new ethers.JsonRpcProvider('https://rpc.xlayer.tech')
 
-async function runOnchainos(args) {
-  const env = { 
-    ...process.env,
-    OKX_API_KEY: config.okx.apiKey,
-    OKX_SECRET_KEY: config.okx.secretKey,
-    OKX_PASSPHRASE: config.okx.passphrase
-  }
+// Initialize Payout Wallet (Pure Node Implementation)
+let payoutWallet = null
+if (config.agent.payoutPrivateKey) {
   try {
-    console.log(`📡 OnchainOS [${onchainosPath}] Running: ${args.substring(0, 120)}...`)
-    const { stdout, stderr } = await execAsync(`"${onchainosPath}" ${args}`, { env, encoding: 'utf8', timeout: 120000 })
-    const jsonStart = stdout.indexOf('{')
-    if (jsonStart === -1) return null
-    const json = JSON.parse(stdout.substring(jsonStart))
-    if (!json.ok && (json.message || json.error)) {
-      return { _error: json.message || json.error, _json: json }
-    }
-    return json.data
-  } catch (error) {
-    const stderrMsg = error.stderr ? error.stderr.trim() : '';
-    const stdoutMsg = error.stdout ? error.stdout.trim() : '';
-    console.error(`OnchainOS Execution Error:`, error.message)
-    if (stderrMsg) console.error(`OnchainOS Stderr:`, stderrMsg)
-    if (stdoutMsg) console.error(`OnchainOS Stdout:`, stdoutMsg)
-    
-    try {
-       const jsonStart = stdoutMsg.indexOf('{');
-       if (jsonStart !== -1) {
-          const json = JSON.parse(stdoutMsg.substring(jsonStart));
-          return { _error: json.message || json.error || stderrMsg || error.message, _json: json };
-       }
-    } catch (e) {}
-    return { _error: stderrMsg || stdoutMsg || error.message }
+    payoutWallet = new ethers.Wallet(config.agent.payoutPrivateKey, provider)
+    console.log(`📡 Payout Wallet Initialized: ${payoutWallet.address} (Ready on X Layer)`)
+  } catch (err) {
+    console.error('⚠️ CRITICAL: Failed to initialize Payout Wallet. Incorrect PRIVATE_KEY?')
   }
+} else {
+  console.warn('⚠️ WARNING: PAYOUT_PRIVATE_KEY is missing. Automated rewards will NOT work!')
 }
 
 // FETCH EXACT TX DATA VIA RPC (The AI's "Eyes")
@@ -97,7 +59,6 @@ async function getTxData(txHash) {
             tokenAddr: log.address,
             from: parsed.args[0],
             to: parsed.args[1],
-            // Only capturing generic values to show token movement
           })
         }
       } catch (e) {
@@ -110,7 +71,7 @@ async function getTxData(txHash) {
       from: tx.from,
       to: tx.to,
       isContractCall: isContract,
-      inputDataPrefix: tx.data.substring(0, 10), // Helps AI identify function calls
+      inputDataPrefix: tx.data.substring(0, 10),
       timestamp: block.timestamp * 1000,
       timestampStr: new Date(block.timestamp * 1000).toLocaleString(),
       status: receipt.status === 1 ? 'SUCCESS' : 'FAILED',
@@ -146,15 +107,6 @@ BLOCKCHAIN EVIDENCE (TX Hash: ${txData.hash}):
 - Method Data Prefix: ${txData.inputDataPrefix}
 
 ANALYSIS INSTRUCTIONS:
-1. OWNERSHIP CHECK: You MUST verify if the CLAIMING WALLET (${walletAddress}) is involved in this transaction. 
-   - Is the 'Sender' (${txData.from}) equal to the 'CLAIMING WALLET'? 
-   - Note: If the user uses Account Abstraction, the 'Sender' will be a Bundler, but the logs (not shown here but implied by the EntryPoint interaction) should have moved assets for the CLAIMING WALLET.
-2. SWAP CRITERIA: A swap interacts with a DEX Smart Contract or Account Abstraction EntryPoint (Is Receiver a Contract? YES). 
-3. ACCOUNT ABSTRACTION: If the receiver is the EntryPoint (0x0000000071727De22E5E9d8BAf0edAc6f37da032), confirm if this specific transaction was triggered for the CLAIMING WALLET.
-4. SIMPLE TRANSFER CRITERIA: A simple transfer just goes to a regular human/agent wallet (Is Receiver a Contract? NO). If 'Receiver' is a regular human or the Agent Payout wallet (0x1ef1...), it is NOT a swap!
-5. The transaction Status MUST be SUCCESS.
-6. The Time MUST be AFTER ${new Date(bounty.startTime).toLocaleString()}
-
 Does this blockchain evidence prove a valid DEX Swap was executed by or on behalf of the CLAIMING WALLET (${walletAddress})?
 Reply with EXACTLY:
 VERDICT: PASS
@@ -199,15 +151,11 @@ async function verifyWallet(walletAddress, txHash, bounty) {
   console.log(`\nStarting Verification for Wallet: ${walletAddress}`)
   console.log(`Submitted TX Hash: ${txHash}`)
 
-  // 1. Fetch exact blockchain evidence first
   const txData = await getTxData(txHash)
-  
   if (!txData) {
     return { verdict: 'FAIL', reason: 'Could not find that transaction hash on the X Layer blockchain.' }
   }
 
-  // 2. STRICTURE OWNERSHIP CHECK (Before AI)
-  // Ensure the wallet is either the sender OR mentioned in the ERC20 logs
   const walletLower = walletAddress.toLowerCase()
   const isSender = txData.from.toLowerCase() === walletLower
   const isInLogs = txData.transfers.some(t => 
@@ -221,36 +169,25 @@ async function verifyWallet(walletAddress, txHash, bounty) {
     }
   }
 
-  // 3. Validate time constraint mechanically
   if (txData.timestamp < bounty.startTime) {
     return { verdict: 'FAIL', reason: `Transaction occurred before the bounty start time.` }
   }
 
-  // 4. Delegate the final complex swap analysis to DeepSeek
   return await askDeepSeekToVerify(walletAddress, bounty, txData)
 }
 
-// ── BALANCE VERIFICATION (for "Hold $1" bounty) ──────────────────────
 async function verifyBalance(walletAddress, bounty) {
   console.log(`\n💰 Verifying full X Layer portfolio for: ${walletAddress}`)
   const usdcAddress = "0x74b7f16337b8972027f6196a17a631ac6de26d22"
   
   try {
-    // 1. Fetch native OKB balance
     const nativeBalanceWei = await provider.getBalance(walletAddress)
     const nativeBalance = parseFloat(ethers.formatEther(nativeBalanceWei))
     
-    // 2. Fetch USDC balance (ERC-20)
-    const usdcContract = new ethers.Contract(usdcAddress, ['function balance(address) view returns (uint256)', 'function decimals() view returns (uint8)'], provider)
-    // Note: OKX USDC on X Layer uses standard ERC20 balance/decimals but we check standard format
-    const usdcBalanceRaw = await provider.call({
-       to: usdcAddress,
-       data: '0x70a08231' + walletAddress.substring(2).padStart(64, '0') // balanceOf(address)
-    });
+    const usdcContract = new ethers.Contract(usdcAddress, ['function balanceOf(address) view returns (uint256)'], provider)
+    const usdcBalanceRaw = await usdcContract.balanceOf(walletAddress)
+    const usdcBalance = parseFloat(ethers.formatUnits(usdcBalanceRaw, 6))
     
-    const usdcBalance = parseFloat(ethers.formatUnits(usdcBalanceRaw, 6)) // USDC on X Layer is 6 decimals
-    
-    // 3. Simple price estimation ($85 for OKB, $1 for USDC)
     const okbPrice = 85 
     const totalValueUsd = (nativeBalance * okbPrice) + usdcBalance
     
@@ -259,129 +196,59 @@ async function verifyBalance(walletAddress, bounty) {
     console.log(`  Estimated Total X Layer Value: ~$${totalValueUsd.toFixed(2)}`)
 
     if (totalValueUsd >= (bounty.minBalance || 1)) {
-      return {
-        verdict: 'PASS',
-        reason: `Wallet verified with a total X Layer value of ~$${totalValueUsd.toFixed(2)}. Requirement met.`
-      }
+      return { verdict: 'PASS', reason: `Wallet verified with value ~$${totalValueUsd.toFixed(2)}.` }
     } else {
-      return {
-        verdict: 'FAIL',
-        reason: `Wallet only holds ~$${totalValueUsd.toFixed(2)} on X Layer (native OKB + USDC). Minimum $${bounty.minBalance || 1} required.`
-      }
+      return { verdict: 'FAIL', reason: `Wallet holds ~$${totalValueUsd.toFixed(2)}. $${bounty.minBalance || 1} required.` }
     }
   } catch (err) {
     console.error('RPC Portfolio Verification error:', err.message)
-    return { verdict: 'FAIL', reason: 'Direct blockchain query failed. Ensure the wallet address is valid and has activity on X Layer Mainnet.' }
+    return { verdict: 'FAIL', reason: 'Direct blockchain query failed.' }
   }
-}
-
-const crypto = require('crypto')
-
-// ── OKX API Helper (bypasses onchainos CLI entirely) ──────────────────
-function okxHeaders(method, requestPath, body = '') {
-  const timestamp = new Date().toISOString()
-  const preHash = timestamp + method.toUpperCase() + requestPath + body
-  const sign = crypto.createHmac('sha256', config.okx.secretKey)
-    .update(preHash)
-    .digest('base64')
-  return {
-    'Content-Type': 'application/json',
-    'OK-ACCESS-KEY': config.okx.apiKey,
-    'OK-ACCESS-SIGN': sign,
-    'OK-ACCESS-TIMESTAMP': timestamp,
-    'OK-ACCESS-PASSPHRASE': config.okx.passphrase,
-    'OK-ACCESS-PROJECT': '' // Empty for default project
-  }
-}
-
-async function okxApiCall(method, path, body = null) {
-  const bodyStr = body ? JSON.stringify(body) : ''
-  const headers = okxHeaders(method, path, bodyStr)
-  const url = `https://web3.okx.com${path}`
-  
-  const fetchOpts = { method, headers }
-  if (body) fetchOpts.body = bodyStr
-  
-  console.log(`📡 OKX API ${method} ${path}`)
-  const response = await fetch(url, fetchOpts)
-  const data = await response.json()
-  console.log(`   OKX API Response:`, JSON.stringify(data).substring(0, 200))
-  return data
 }
 
 async function sendPayout(walletAddress, amount) {
-  const usdcAddress = "0x74b7f16337b8972027f6196a17a631ac6de26d22" // X Layer Mainnet USDC
-  const agentAddress = "0x1ef1034e7cd690b40a329bd64209ce563f95bb5c"
-  const chainIndex = "196" // X Layer
+  const usdcAddress = "0x74b7f16337b8972027f6196a17a631ac6de26d22"
   
   try {
-    // 1. Check balance via RPC
-    console.log(`📡 Checking Agent Wallet (${agentAddress}) balance for payout...`)
+    if (!payoutWallet) {
+      console.error('PAYOUT ERROR: Payout wallet not initialized. Check your PRIVATE_KEY.')
+      return { success: false, error: 'SYSTEM_ERROR', message: 'Payout system not ready.' }
+    }
+
+    const agentAddress = payoutWallet.address
+    console.log(`📡 Checking Payout Wallet Balance (${agentAddress})...`)
+    
     const usdcContract = new ethers.Contract(usdcAddress, [
       'function balanceOf(address) view returns (uint256)',
-      'function decimals() view returns (uint8)'
-    ], provider)
+      'function transfer(address to, uint256 value) returns (bool)'
+    ], payoutWallet)
+
     const agentBalanceRaw = await usdcContract.balanceOf(agentAddress)
     const agentBalance = parseFloat(ethers.formatUnits(agentBalanceRaw, 6))
-    console.log(`   Agent Balance: ${agentBalance} USDC`)
+    
+    console.log(`   Balance: ${agentBalance} USDC`)
 
     if (agentBalance < parseFloat(amount)) {
-      console.error(`INSUFFICIENT FUNDS: Agent has ${agentBalance} USDC, needs ${amount} USDC.`)
+      console.error(`INSUFFICIENT FUNDS: Need ${amount}, have ${agentBalance}.`)
       return { success: false, error: 'INSUFFICIENT_FUNDS', balance: agentBalance, needed: amount }
     }
 
-    // 2. Build the ERC-20 transfer calldata
-    const iface = new ethers.Interface(['function transfer(address to, uint256 amount)'])
-    const transferAmount = ethers.parseUnits(amount.toString(), 6)
-    const calldata = iface.encodeFunctionData('transfer', [walletAddress, transferAmount])
+    const minimalUnits = ethers.parseUnits(amount.toString(), 6)
 
-    // 3. Get sign-info from OKX API (assembles + signs the tx in TEE)
-    console.log(`📡 Requesting OKX sign-info for ERC-20 transfer...`)
-    const signInfoBody = {
-      chainIndex: chainIndex,
-      fromAddr: agentAddress,
-      toAddr: usdcAddress,
-      extJson: JSON.stringify({
-        inputData: calldata
-      })
-    }
+    console.log(`🚀 Executing Payout: ${amount} USDC to ${walletAddress}...`)
     
-    const signInfoResp = await okxApiCall('POST', '/api/v5/wallet/pre-transaction/sign-info', signInfoBody)
+    // Perform direct ERC20 transfer via EOA Private Key
+    const tx = await usdcContract.transfer(walletAddress, minimalUnits)
+    console.log(`✅ Payout Submitted! TX: ${tx.hash}`)
     
-    if (signInfoResp.code !== '0' && signInfoResp.code !== 0) {
-      console.error(`OKX sign-info failed:`, JSON.stringify(signInfoResp))
-      return { success: false, error: 'SIGN_INFO_FAILED', message: signInfoResp.msg || signInfoResp.message || JSON.stringify(signInfoResp) }
-    }
+    // Wait for confirmation (optional but recommended for robustness)
+    const receipt = await tx.wait(1)
+    console.log(`🏆 Payout Confirmed in block ${receipt.blockNumber}`)
 
-    const signedTx = signInfoResp.data?.[0]?.signedTx || signInfoResp.data?.signedTx
-    
-    if (!signedTx) {
-      console.error(`OKX sign-info returned no signedTx:`, JSON.stringify(signInfoResp))
-      return { success: false, error: 'NO_SIGNED_TX', message: 'OKX API did not return a signed transaction' }
-    }
-
-    // 4. Broadcast the signed transaction
-    console.log(`📡 Broadcasting signed transaction...`)
-    const broadcastBody = {
-      signedTx: signedTx,
-      chainIndex: chainIndex,
-      address: agentAddress
-    }
-    
-    const broadcastResp = await okxApiCall('POST', '/api/v5/wallet/pre-transaction/broadcast-transaction', broadcastBody)
-    
-    if (broadcastResp.code !== '0' && broadcastResp.code !== 0) {
-      console.error(`OKX broadcast failed:`, JSON.stringify(broadcastResp))
-      return { success: false, error: 'BROADCAST_FAILED', message: broadcastResp.msg || broadcastResp.message || JSON.stringify(broadcastResp) }
-    }
-
-    const txHash = broadcastResp.data?.[0]?.txHash || broadcastResp.data?.txHash || broadcastResp.data?.[0]?.orderId
-    console.log(`✅ Payout broadcast success! TX: ${txHash}`)
-    return { success: true, txHash: txHash }
-
+    return { success: true, txHash: tx.hash }
   } catch (err) {
-    console.error('Payout process crashed:', err.message)
-    return { success: false, error: 'SYSTEM_ERROR', message: err.message }
+    console.error('CRITICAL: Payout process failed:', err.message)
+    return { success: false, error: 'PAYOUT_ERROR', message: err.message }
   }
 }
 

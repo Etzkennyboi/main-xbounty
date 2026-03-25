@@ -1,23 +1,11 @@
-# Use Ubuntu 24.04 to ensure GLIBC >= 2.39 is available for onchainos
-FROM ubuntu:24.04
+# Use a lightweight Node.js image
+FROM node:20-slim
 
-# Install Node.js 20 and system dependencies in one layer
+# Install basic system dependencies
 RUN apt-get update && apt-get install -y \
     curl \
     ca-certificates \
-    gnupg \
-    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
-
-# Install onchainos (OKX Onchain OS CLI) — still used for non-send operations
-RUN curl -sSL "https://raw.githubusercontent.com/okx/onchainos-skills/main/install.sh" | sh
-
-# Add onchainos to path (default install location is ~/.local/bin)
-ENV PATH="/root/.local/bin:${PATH}"
-
-# Verify onchainos installed correctly
-RUN onchainos --version || echo "WARNING: onchainos not available"
 
 # Set working directory
 WORKDIR /app
@@ -41,5 +29,5 @@ WORKDIR /app
 # Expose the API port
 EXPOSE 3001
 
-# Start the application directly with node (avoids npm wrapper SIGTERM issues)
+# Start the application
 CMD ["node", "src/index.js"]
