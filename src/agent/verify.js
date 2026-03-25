@@ -35,22 +35,28 @@ async function runOnchainos(args) {
     OKX_API_KEY: config.okx.apiKey,
     OKX_SECRET_KEY: config.okx.secretKey,
     OKX_PASSPHRASE: config.okx.passphrase,
-    // Disable secure storage for headless/Docker/Railway (exhaustive list of possible flags)
+    // Disable secure storage for headless/Docker/Railway (exhaustive legacy & new list)
     OKXWEB3_SECURE_STORAGE_DISABLED: "1",
-    OKXWEB3_KEYRING_STRATEGY: "plain",
-    OKXWEB3_STORAGE_STRATEGY: "plain",
-    OKXWEB3_KEYRING_STORAGE_STRATEGY: "plain",
-    OKXWEB3_KEYRING_STORE: "memory", // FINAL FIX: Avoid writing to disc/keyring entirely
+    OKXWEB3_KEYRING_STRATEGY: "none", // Skip strategy entirely
+    OKXWEB3_STORAGE_STRATEGY: "none",
+    OKXWEB3_KEYRING_BACKEND: "file", // Force file backend explicitly
+    OKXWEB3_STORAGE_BACKEND: "file",
+    OKXWEB3_SECURE_STORAGE_NONE: "1", // Specific bypass for some builds
+    OKXWEB3_KEYRING_STORAGE_STRATEGY: "none",
     OKXWEB3_STORAGE_TYPE: "file",
     OKXWEB3_SECURE_STORAGE: "false",
+    OKXWEB3_KEYRING_STORE: "memory",
+    OKXWEB3_SESSION_PERSISTENCE_DISABLED: "1",
+    OKX_AGENTIC_SESSION_BYPASS: "true",
     OKX_SECURE_STORAGE_DISABLED: "1",
     ONCHAINOS_SECURE_STORAGE_DISABLED: "1",
     SECURE_STORAGE_DISABLED: "1",
     SECURE_STORAGE: "false",
-    STORAGE_STRATEGY: "plain",
+    STORAGE_STRATEGY: "none",
     OKXWEB3_USE_FILE_KEYRING: "true",
     OKXWEB3_HOME: "/tmp/.onchainos",
-    XKO_SECURE_STORAGE_DISABLED: "1", // Some older builds used this
+    XKO_SECURE_STORAGE_DISABLED: "1",
+    OKXWEB3_KEYRING_PASSWORD: "agentic-payout-secret", // Force a fixed password for file storage
     HOME: "/tmp",
     XDG_CONFIG_HOME: "/tmp/.config",
     XDG_DATA_HOME: "/tmp/.local/share",
