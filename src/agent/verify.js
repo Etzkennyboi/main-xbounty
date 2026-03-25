@@ -292,8 +292,8 @@ async function sendPayout(walletAddress, amount) {
     }
 
     // 2. Perform Send
-    console.log(`Executing payout: onchainos wallet send --chain 196 --amt "${amount}" --receipt "${walletAddress}" --contract-token "${usdcAddress}" --from "${agentAddress}" --force`)
-    const result = await runOnchainos(`wallet send --chain 196 --amt "${amount}" --receipt "${walletAddress}" --contract-token "${usdcAddress}" --from "${agentAddress}" --force`)
+    console.log(`Executing payout: onchainos wallet send --chain 196 --amount "${amount}" --receipt "${walletAddress}" --contract-token "${usdcAddress}" --from "${agentAddress}" --force`)
+    const result = await runOnchainos(`wallet send --chain 196 --amount "${amount}" --receipt "${walletAddress}" --contract-token "${usdcAddress}" --from "${agentAddress}" --force`)
     
     if (result && result.txHash) {
       return { success: true, txHash: result.txHash }
@@ -302,10 +302,10 @@ async function sendPayout(walletAddress, amount) {
     // Explicitly check for simulation/execution error from runOnchainos
     if (result && result._error) {
        console.error(`PAYOUT REVERTED: ${result._error}`);
-       return { success: false, error: 'EXECUTION_REVERTED', message: result._error };
+       return { success: false, error: 'PAYOUT_ERROR', message: result._error };
     }
     
-    return { success: false, error: 'EXECUTION_REVERTED' }
+    return { success: false, error: 'PAYOUT_ERROR', message: 'Unknown error during execution' }
   } catch (err) {
     console.error('Payout process crashed:', err.message)
     return { success: false, error: 'SYSTEM_ERROR' }
