@@ -18,7 +18,13 @@ process.on('unhandledRejection', (err) => {
 const IS_WIN = process.platform === 'win32'
 const onchainosPath = IS_WIN 
   ? path.join(process.env.USERPROFILE || '', '.local', 'bin', 'onchainos.exe')
-  : 'onchainos' // Installed via script on Linux
+  : '/root/.local/bin/onchainos' // Default installation path in Dockerfile
+
+// Startup Check: Ensure keys are available
+if (!config.okx.apiKey || !config.okx.secretKey || !config.okx.passphrase) {
+  console.warn('⚠️ CRITICAL WARNING: OKX API credentials missing in environment!')
+}
+console.log(`📡 OnchainOS initialized on ${process.platform}. Binary path: ${onchainosPath}`)
 
 // RPC Source of Truth (Zero API Key Required)
 const provider = new ethers.JsonRpcProvider('https://rpc.xlayer.tech')
@@ -31,6 +37,7 @@ async function runOnchainos(args) {
     OKX_PASSPHRASE: config.okx.passphrase
   }
   try {
+    console.log(`📡 OnchainOS [${onchainosPath}] Running args: ${args.substring(0, 100)}...`)
     const { stdout, stderr } = await execAsync(`"${onchainosPath}" ${args}`, { env, encoding: 'utf8', timeout: 120000 })
     const jsonStart = stdout.indexOf('{')
     if (jsonStart === -1) return null
@@ -40,18 +47,20 @@ async function runOnchainos(args) {
     }
     return json.data
   } catch (error) {
-    const stderrMsg = error.stderr || '';
-    const stdoutMsg = error.stdout || '';
+    const stderrMsg = error.stderr ? error.stderr.trim() : '';
+    const stdoutMsg = error.stdout ? error.stdout.trim() : '';
     console.error(`OnchainOS Execution Error:`, error.message)
     if (stderrMsg) console.error(`OnchainOS Stderr:`, stderrMsg)
+    if (stdoutMsg) console.error(`OnchainOS Stdout:`, stdoutMsg)
+    
     try {
        const jsonStart = stdoutMsg.indexOf('{');
        if (jsonStart !== -1) {
           const json = JSON.parse(stdoutMsg.substring(jsonStart));
-          return { _error: json.message || stderrMsg || error.message, _json: json };
+          return { _error: json.message || stderrMsg || stdoutMsg || error.message, _json: json };
        }
     } catch (e) {}
-    return { _error: stderrMsg || error.message }
+    return { _error: stderrMsg || stdoutMsg || error.message }
   }
 }
 
