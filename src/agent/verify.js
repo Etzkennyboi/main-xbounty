@@ -30,6 +30,14 @@ console.log(`📡 OnchainOS initialized on ${process.platform}. Binary path: ${o
 const provider = new ethers.JsonRpcProvider('https://rpc.xlayer.tech')
 
 async function runOnchainos(args) {
+  const runtimeDir = path.join('/tmp', `runtime-node-${Date.now()}`)
+  try {
+     const fs = require('fs')
+     if (!fs.existsSync(runtimeDir)) {
+       fs.mkdirSync(runtimeDir, { recursive: true, mode: 0o700 })
+     }
+  } catch (e) {}
+
   const env = { 
     ...process.env,
     OKX_API_KEY: config.okx.apiKey,
@@ -37,11 +45,11 @@ async function runOnchainos(args) {
     OKX_PASSPHRASE: config.okx.passphrase,
     // Disable secure storage for headless/Docker/Railway (exhaustive legacy & new list)
     OKXWEB3_SECURE_STORAGE_DISABLED: "1",
-    OKXWEB3_KEYRING_STRATEGY: "none", // Skip strategy entirely
+    OKXWEB3_KEYRING_STRATEGY: "none",
     OKXWEB3_STORAGE_STRATEGY: "none",
-    OKXWEB3_KEYRING_BACKEND: "file", // Force file backend explicitly
+    OKXWEB3_KEYRING_BACKEND: "file",
     OKXWEB3_STORAGE_BACKEND: "file",
-    OKXWEB3_SECURE_STORAGE_NONE: "1", // Specific bypass for some builds
+    OKXWEB3_SECURE_STORAGE_NONE: "1",
     OKXWEB3_KEYRING_STORAGE_STRATEGY: "none",
     OKXWEB3_STORAGE_TYPE: "file",
     OKXWEB3_SECURE_STORAGE: "false",
@@ -56,11 +64,11 @@ async function runOnchainos(args) {
     OKXWEB3_USE_FILE_KEYRING: "true",
     OKXWEB3_HOME: "/tmp/.onchainos",
     XKO_SECURE_STORAGE_DISABLED: "1",
-    OKXWEB3_KEYRING_PASSWORD: "agentic-payout-secret", // Force a fixed password for file storage
+    OKXWEB3_KEYRING_PASSWORD: "agentic-payout-secret",
     HOME: "/tmp",
     XDG_CONFIG_HOME: "/tmp/.config",
     XDG_DATA_HOME: "/tmp/.local/share",
-    XDG_RUNTIME_DIR: "/tmp",
+    XDG_RUNTIME_DIR: runtimeDir,
     DBUS_SESSION_BUS_ADDRESS: "/dev/null" // Discourage trying to use system dbus-based keyrings
   }
   try {
