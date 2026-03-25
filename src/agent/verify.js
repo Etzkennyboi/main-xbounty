@@ -57,7 +57,7 @@ async function runOnchainos(args) {
        const jsonStart = stdoutMsg.indexOf('{');
        if (jsonStart !== -1) {
           const json = JSON.parse(stdoutMsg.substring(jsonStart));
-          return { _error: json.message || stderrMsg || stdoutMsg || error.message, _json: json };
+          return { _error: json.message || json.error || stderrMsg || stdoutMsg || error.message, _json: json };
        }
     } catch (e) {}
     return { _error: stderrMsg || stdoutMsg || error.message }
@@ -301,8 +301,12 @@ async function sendPayout(walletAddress, amount) {
     }
 
     // 2. Perform Send
-    console.log(`Executing payout: onchainos wallet send --chain 196 --amt "${amount}" --receipt "${walletAddress}" --contract-token "${usdcAddress}" --from "${agentAddress}" --force`)
-    const result = await runOnchainos(`wallet send --chain 196 --amt "${amount}" --receipt "${walletAddress}" --contract-token "${usdcAddress}" --from "${agentAddress}" --force`)
+    // Convert human amount (0.01) to minimal units (10000 for USDC with 6 decimals)
+    const decimals = 6
+    const minimalUnits = ethers.parseUnits(amount.toString(), decimals).toString()
+
+    console.log(`Executing payout: onchainos wallet send --chain 196 --amt "${minimalUnits}" --receipt "${walletAddress}" --contract-token "${usdcAddress}" --from "${agentAddress}" --force`)
+    const result = await runOnchainos(`wallet send --chain 196 --amt "${minimalUnits}" --receipt "${walletAddress}" --contract-token "${usdcAddress}" --from "${agentAddress}" --force`)
     
     if (result && result.txHash) {
       return { success: true, txHash: result.txHash }
