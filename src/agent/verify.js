@@ -275,53 +275,113 @@ async function verifyBalance(walletAddress, bounty) {
   }
 }
 
+const crypto = require('crypto')
+
+// ── OKX API Helper (bypasses onchainos CLI entirely) ──────────────────
+function okxHeaders(method, requestPath, body = '') {
+  const timestamp = new Date().toISOString()
+  const preHash = timestamp + method.toUpperCase() + requestPath + body
+  const sign = crypto.createHmac('sha256', config.okx.secretKey)
+    .update(preHash)
+    .digest('base64')
+  return {
+    'Content-Type': 'application/json',
+    'OK-ACCESS-KEY': config.okx.apiKey,
+    'OK-ACCESS-SIGN': sign,
+    'OK-ACCESS-TIMESTAMP': timestamp,
+    'OK-ACCESS-PASSPHRASE': config.okx.passphrase,
+    'OK-ACCESS-PROJECT': '' // Empty for default project
+  }
+}
+
+async function okxApiCall(method, path, body = null) {
+  const bodyStr = body ? JSON.stringify(body) : ''
+  const headers = okxHeaders(method, path, bodyStr)
+  const url = `https://web3.okx.com${path}`
+  
+  const fetchOpts = { method, headers }
+  if (body) fetchOpts.body = bodyStr
+  
+  console.log(`📡 OKX API ${method} ${path}`)
+  const response = await fetch(url, fetchOpts)
+  const data = await response.json()
+  console.log(`   OKX API Response:`, JSON.stringify(data).substring(0, 200))
+  return data
+}
+
 async function sendPayout(walletAddress, amount) {
   const usdcAddress = "0x74b7f16337b8972027f6196a17a631ac6de26d22" // X Layer Mainnet USDC
   const agentAddress = "0x1ef1034e7cd690b40a329bd64209ce563f95bb5c"
+  const chainIndex = "196" // X Layer
   
   try {
-    // 1. Initial check: Does agent have enough USDC? Use direct RPC to be session-independent
+    // 1. Check balance via RPC
     console.log(`📡 Checking Agent Wallet (${agentAddress}) balance for payout...`)
-    
-    // Contract setup for USDC
     const usdcContract = new ethers.Contract(usdcAddress, [
       'function balanceOf(address) view returns (uint256)',
       'function decimals() view returns (uint8)'
     ], provider)
-
-    // Call balanceOf(agentAddress)
     const agentBalanceRaw = await usdcContract.balanceOf(agentAddress)
-    const agentBalance = parseFloat(ethers.formatUnits(agentBalanceRaw, 6)) // USDC is 6 decimals
-    
+    const agentBalance = parseFloat(ethers.formatUnits(agentBalanceRaw, 6))
     console.log(`   Agent Balance: ${agentBalance} USDC`)
 
     if (agentBalance < parseFloat(amount)) {
-      console.error(`INSUFFICIENT FUNDS: Agent has ${agentBalance} USDC, but this reward requires ${amount} USDC.`);
+      console.error(`INSUFFICIENT FUNDS: Agent has ${agentBalance} USDC, needs ${amount} USDC.`)
       return { success: false, error: 'INSUFFICIENT_FUNDS', balance: agentBalance, needed: amount }
     }
 
-    // 2. Perform Send
-    // Convert human amount (0.01) to minimal units (10000 for USDC with 6 decimals)
-    const decimals = 6
-    const minimalUnits = ethers.parseUnits(amount.toString(), decimals).toString()
+    // 2. Build the ERC-20 transfer calldata
+    const iface = new ethers.Interface(['function transfer(address to, uint256 amount)'])
+    const transferAmount = ethers.parseUnits(amount.toString(), 6)
+    const calldata = iface.encodeFunctionData('transfer', [walletAddress, transferAmount])
 
-    console.log(`Executing payout: onchainos wallet send --chain 196 --amt "${minimalUnits}" --receipt "${walletAddress}" --contract-token "${usdcAddress}" --from "${agentAddress}" --force`)
-    const result = await runOnchainos(`wallet send --chain 196 --amt "${minimalUnits}" --receipt "${walletAddress}" --contract-token "${usdcAddress}" --from "${agentAddress}" --force`)
-    
-    if (result && result.txHash) {
-      return { success: true, txHash: result.txHash }
+    // 3. Get sign-info from OKX API (assembles + signs the tx in TEE)
+    console.log(`📡 Requesting OKX sign-info for ERC-20 transfer...`)
+    const signInfoBody = {
+      chainIndex: chainIndex,
+      fromAddr: agentAddress,
+      toAddr: usdcAddress,
+      extJson: JSON.stringify({
+        inputData: calldata
+      })
     }
     
-    // Explicitly check for simulation/execution error from runOnchainos
-    if (result && result._error) {
-       console.error(`PAYOUT REVERTED: ${result._error}`);
-       return { success: false, error: 'PAYOUT_ERROR', message: result._error };
+    const signInfoResp = await okxApiCall('POST', '/api/v5/wallet/pre-transaction/sign-info', signInfoBody)
+    
+    if (signInfoResp.code !== '0' && signInfoResp.code !== 0) {
+      console.error(`OKX sign-info failed:`, JSON.stringify(signInfoResp))
+      return { success: false, error: 'SIGN_INFO_FAILED', message: signInfoResp.msg || signInfoResp.message || JSON.stringify(signInfoResp) }
+    }
+
+    const signedTx = signInfoResp.data?.[0]?.signedTx || signInfoResp.data?.signedTx
+    
+    if (!signedTx) {
+      console.error(`OKX sign-info returned no signedTx:`, JSON.stringify(signInfoResp))
+      return { success: false, error: 'NO_SIGNED_TX', message: 'OKX API did not return a signed transaction' }
+    }
+
+    // 4. Broadcast the signed transaction
+    console.log(`📡 Broadcasting signed transaction...`)
+    const broadcastBody = {
+      signedTx: signedTx,
+      chainIndex: chainIndex,
+      address: agentAddress
     }
     
-    return { success: false, error: 'PAYOUT_ERROR', message: 'Unknown error during execution' }
+    const broadcastResp = await okxApiCall('POST', '/api/v5/wallet/pre-transaction/broadcast-transaction', broadcastBody)
+    
+    if (broadcastResp.code !== '0' && broadcastResp.code !== 0) {
+      console.error(`OKX broadcast failed:`, JSON.stringify(broadcastResp))
+      return { success: false, error: 'BROADCAST_FAILED', message: broadcastResp.msg || broadcastResp.message || JSON.stringify(broadcastResp) }
+    }
+
+    const txHash = broadcastResp.data?.[0]?.txHash || broadcastResp.data?.txHash || broadcastResp.data?.[0]?.orderId
+    console.log(`✅ Payout broadcast success! TX: ${txHash}`)
+    return { success: true, txHash: txHash }
+
   } catch (err) {
     console.error('Payout process crashed:', err.message)
-    return { success: false, error: 'SYSTEM_ERROR' }
+    return { success: false, error: 'SYSTEM_ERROR', message: err.message }
   }
 }
 
