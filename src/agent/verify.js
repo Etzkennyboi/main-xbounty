@@ -40,6 +40,7 @@ async function runOnchainos(args) {
     OKXWEB3_KEYRING_STRATEGY: "plain",
     OKXWEB3_STORAGE_STRATEGY: "plain",
     OKXWEB3_KEYRING_STORAGE_STRATEGY: "plain",
+    OKXWEB3_KEYRING_STORE: "memory", // FINAL FIX: Avoid writing to disc/keyring entirely
     OKXWEB3_STORAGE_TYPE: "file",
     OKXWEB3_SECURE_STORAGE: "false",
     OKX_SECURE_STORAGE_DISABLED: "1",
