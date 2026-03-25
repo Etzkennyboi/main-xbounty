@@ -41,7 +41,9 @@ async function runOnchainos(args) {
     SECURE_STORAGE_DISABLED: "1",
     OKXWEB3_USE_FILE_KEYRING: "true",
     OKXWEB3_STORAGE_TYPE: "file",
-    OKXWEB3_HOME: "/tmp/.onchainos" // Ensure a writable storage directory
+    OKXWEB3_HOME: "/tmp/.onchainos",
+    XDG_RUNTIME_DIR: "/tmp", // Essential for some Linux keyring implementations
+    DBUS_SESSION_BUS_ADDRESS: "/dev/null" // Discourage trying to use system dbus-based keyrings
   }
   try {
     console.log(`📡 OnchainOS [${onchainosPath}] Running args: ${args.substring(0, 100)}...`)
