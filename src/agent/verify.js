@@ -213,18 +213,30 @@ async function verifyWallet(walletAddress, txHash, bounty) {
 // ── BALANCE VERIFICATION (for "Hold $1" bounty) ──────────────────────
 async function verifyBalance(walletAddress, bounty) {
   console.log(`\n💰 Verifying full X Layer portfolio for: ${walletAddress}`)
+  const usdcAddress = "0x74b7f16337b8972027f6196a17a631ac6de26d22"
   
   try {
-    // We use the Onchain OS Portfolio tool - the source of truth for OKX wallet data
-    // This automatically handles native OKB + all ERC-20s + DeFi at real-time prices
-    const result = await runOnchainos(`portfolio total-value --address ${walletAddress} --chains xlayer --asset-type 0`)
+    // 1. Fetch native OKB balance
+    const nativeBalanceWei = await provider.getBalance(walletAddress)
+    const nativeBalance = parseFloat(ethers.formatEther(nativeBalanceWei))
     
-    if (!result || !result[0]) {
-      throw new Error('Portfolio service returned no data.')
-    }
-
-    const totalValueUsd = parseFloat(result[0].totalValue || 0)
-    console.log(`  Total X Layer Portfolio Value: ~$${totalValueUsd.toFixed(2)}`)
+    // 2. Fetch USDC balance (ERC-20)
+    const usdcContract = new ethers.Contract(usdcAddress, ['function balance(address) view returns (uint256)', 'function decimals() view returns (uint8)'], provider)
+    // Note: OKX USDC on X Layer uses standard ERC20 balance/decimals but we check standard format
+    const usdcBalanceRaw = await provider.call({
+       to: usdcAddress,
+       data: '0x70a08231' + walletAddress.substring(2).padStart(64, '0') // balanceOf(address)
+    });
+    
+    const usdcBalance = parseFloat(ethers.formatUnits(usdcBalanceRaw, 6)) // USDC on X Layer is 6 decimals
+    
+    // 3. Simple price estimation ($85 for OKB, $1 for USDC)
+    const okbPrice = 85 
+    const totalValueUsd = (nativeBalance * okbPrice) + usdcBalance
+    
+    console.log(`  Native OKB: ${nativeBalance.toFixed(4)} (~$${(nativeBalance * okbPrice).toFixed(2)})`)
+    console.log(`  USDC: ${usdcBalance.toFixed(2)} ($${usdcBalance.toFixed(2)})`)
+    console.log(`  Estimated Total X Layer Value: ~$${totalValueUsd.toFixed(2)}`)
 
     if (totalValueUsd >= (bounty.minBalance || 1)) {
       return {
@@ -234,12 +246,12 @@ async function verifyBalance(walletAddress, bounty) {
     } else {
       return {
         verdict: 'FAIL',
-        reason: `Wallet only holds ~$${totalValueUsd.toFixed(2)} on X Layer (including native assets and tokens). Minimum $${bounty.minBalance || 1} required.`
+        reason: `Wallet only holds ~$${totalValueUsd.toFixed(2)} on X Layer (native OKB + USDC). Minimum $${bounty.minBalance || 1} required.`
       }
     }
   } catch (err) {
-    console.error('Portfolio Verification error:', err.message)
-    return { verdict: 'FAIL', reason: 'High-level portfolio check failed. Ensure your wallet has active assets on X Layer Mainnet.' }
+    console.error('RPC Portfolio Verification error:', err.message)
+    return { verdict: 'FAIL', reason: 'Direct blockchain query failed. Ensure the wallet address is valid and has activity on X Layer Mainnet.' }
   }
 }
 
