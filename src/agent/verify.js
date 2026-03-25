@@ -35,14 +35,17 @@ async function runOnchainos(args) {
     OKX_API_KEY: config.okx.apiKey,
     OKX_SECRET_KEY: config.okx.secretKey,
     OKX_PASSPHRASE: config.okx.passphrase,
-    // Disable secure storage for headless/Docker environments (trying all common variations)
+    // Disable secure storage for headless/Docker environments (trying all variations)
     OKXWEB3_SECURE_STORAGE_DISABLED: "1",
     ONCHAINOS_SECURE_STORAGE_DISABLED: "1",
     SECURE_STORAGE_DISABLED: "1",
     OKXWEB3_USE_FILE_KEYRING: "true",
     OKXWEB3_STORAGE_TYPE: "file",
     OKXWEB3_HOME: "/tmp/.onchainos",
-    XDG_RUNTIME_DIR: "/tmp", // Essential for some Linux keyring implementations
+    HOME: "/tmp", // Force simple file home
+    XDG_CONFIG_HOME: "/tmp/.config",
+    XDG_DATA_HOME: "/tmp/.local/share",
+    XDG_RUNTIME_DIR: "/tmp",
     DBUS_SESSION_BUS_ADDRESS: "/dev/null" // Discourage trying to use system dbus-based keyrings
   }
   try {
