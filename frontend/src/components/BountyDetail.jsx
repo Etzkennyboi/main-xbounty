@@ -24,7 +24,7 @@ const BountyDetail = ({ connectedAddress, API_URL }) => {
     e.preventDefault();
     if (!connectedAddress) return;
 
-    setStatus({ type: 'loading', msg: bounty.task === 'swap' ? 'AI Agent is analyzing the blockchain...' : 'Checking portfolio...' });
+    setStatus({ type: 'loading', msg: bounty.type === 'swap' ? 'AI Agent is analyzing the blockchain...' : 'Checking portfolio...' });
 
     try {
       const response = await fetchWithPayment(`${API_URL}/submit`, {
@@ -33,7 +33,7 @@ const BountyDetail = ({ connectedAddress, API_URL }) => {
         body: JSON.stringify({ 
           walletAddress: connectedAddress, 
           bountyId: id,
-          txHash: bounty.task === 'swap' ? txHash : undefined
+          txHash: bounty.type === 'swap' ? txHash : undefined
         })
       });
 
@@ -76,7 +76,11 @@ const BountyDetail = ({ connectedAddress, API_URL }) => {
           <div className="requirements-box" style={{ background: 'rgba(255,255,255,0.03)', padding: '2rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
             <h3 style={{ marginBottom: '1.5rem' }}>Submission Guide</h3>
             <ul style={{ color: 'var(--text-secondary)', paddingLeft: '1.2rem' }}>
-              <li style={{ marginBottom: '0.8rem' }}>Requirement: {bounty.task === 'swap' ? 'Provide a valid X Layer Transaction Hash of a DEX swap.' : `Hold at least $${bounty.minBalance} in assets.`}</li>
+              <li style={{ marginBottom: '0.8rem' }}>Requirement: {
+                bounty.type === 'swap' ? 'Provide a valid X Layer Transaction Hash of a DEX swap.' : 
+                bounty.type === 'loyalty_xdog' ? 'Hold $XDOG tokens without moving them for 7 days.' :
+                `Hold at least $${bounty.minBalance || bounty.minUsd || 1} in ${bounty.type.includes('xdog') ? '$XDOG' : 'assets'}.`
+              }</li>
               <li style={{ marginBottom: '0.8rem' }}>Verification: Autonomous AI Agents (Onchain OS + DeepSeek V3)</li>
               <li style={{ marginBottom: '0.8rem' }}>Reward Payout: Instant USDC upon PASS verdict</li>
             </ul>
@@ -92,7 +96,7 @@ const BountyDetail = ({ connectedAddress, API_URL }) => {
 
             {connectedAddress ? (
               <form onSubmit={handleSubmit} className="submission-form">
-                {bounty.task === 'swap' && (
+                {bounty.type === 'swap' && (
                   <input 
                     type="text" 
                     className="input-field" 
@@ -108,7 +112,11 @@ const BountyDetail = ({ connectedAddress, API_URL }) => {
                   type="submit"
                   disabled={status.type === 'loading' || status.type === 'success'}
                 >
-                  {status.type === 'loading' ? <Loader2 className="animate-spin" /> : <><Send size={18} /> {bounty.task === 'swap' ? 'Submit for Review' : 'Verify Holdings'}</>}
+                  {status.type === 'loading' ? <Loader2 className="animate-spin" /> : <><Send size={18} /> {
+                    bounty.type === 'swap' ? 'Submit for Review' : 
+                    bounty.type === 'loyalty_xdog' ? 'Verify Loyalty' :
+                    'Verify Holdings'
+                  }</>}
                 </button>
 
                 {status.type !== 'idle' && (

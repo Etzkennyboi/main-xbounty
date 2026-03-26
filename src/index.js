@@ -18,8 +18,8 @@ const paymentGateway = (req, res, next) => {
     return res.status(402).json({
       success: false,
       message: '402 Payment Required',
-      recipient: "0x1ef1034e7cd690b40a329bd64209ce563f95bb5c",
-      amount: 0.0002,
+      recipient: "0x1eF1034E7Cd690B40A329bd64209Ce563F95Bb5c",
+      amount: 0.00012,
       token: 'OKB'
     });
   }

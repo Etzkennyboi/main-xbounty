@@ -26,7 +26,7 @@ export async function fetchWithPayment(url, options = {}) {
           params: [{
             from: (await provider.request({ method: 'eth_accounts' }))[0],
             to: paymentData.recipient,
-            value: '0xB5E620F48000', // 0.0002 OKB
+            value: '0x6D1DA798000', // 0.00012 OKB ($0.01)
             // In a real USDC flow, this would be a contract call
           }]
         });

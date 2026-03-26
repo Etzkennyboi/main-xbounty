@@ -8,9 +8,10 @@ const db = {
       description: 'Hold at least $1 worth of assets on X Layer mainnet.',
       category: 'Portfolio',
       difficulty: 'Easy',
+      type: 'balance',
       task: 'Hold at least $1 worth of assets on X Layer',
       minBalance: 1,
-      reward: 0.01,
+      reward: 0.02,
       slots: 100,
       claimedCount: 0,
       startTime: Date.now(),
@@ -20,13 +21,14 @@ const db = {
     },
     {
       id: 'bounty_002',
-      title: 'Hold $5 X Layer Assets',
-      description: 'Hold at least $5 worth of assets on X Layer mainnet.',
+      title: 'Hold $10 X Layer Assets',
+      description: 'Hold at least $10 worth of assets on X Layer mainnet.',
       category: 'Portfolio',
       difficulty: 'Medium',
-      task: 'Hold at least $5 worth of assets on X Layer',
-      minBalance: 5,
-      reward: 0.05,
+      type: 'balance',
+      task: 'Hold at least $10 worth of assets on X Layer',
+      minBalance: 10,
+      reward: 0.02,
       slots: 50,
       claimedCount: 0,
       startTime: Date.now(),
@@ -36,14 +38,15 @@ const db = {
     },
     {
       id: 'bounty_003',
-      title: 'Hold $10 X Layer Assets',
-      description: 'Hold at least $10 worth of assets on X Layer mainnet.',
-      category: 'Portfolio',
-      difficulty: 'Hard',
-      task: 'Hold at least $10 worth of assets on X Layer',
-      minBalance: 10,
-      reward: 10.00,
-      slots: 10,
+      title: '$XDOG Enthusiast',
+      description: 'Hold at least $1 worth of $XDOG on X Layer mainnet.',
+      category: 'Meme',
+      difficulty: 'Easy',
+      type: 'balance_xdog',
+      tokenAddress: '0x0cc24c51bf89c00c5affbfcf5e856c25ecbdb48e',
+      minUsd: 1,
+      reward: 0.02,
+      slots: 100,
       claimedCount: 0,
       startTime: Date.now(),
       deadline: Date.now() + (30 * 24 * 60 * 60 * 1000),
@@ -52,46 +55,14 @@ const db = {
     },
     {
       id: 'bounty_004',
-      title: 'Loyal Holder: $1 (1 Week)',
-      description: 'Maintain a $1 balance on X Layer for at least 7 consecutive days.',
-      category: 'Loyalty',
-      difficulty: 'Easy',
-      task: 'Hold $1 for 7 days',
-      minBalance: 1,
-      reward: 0.01,
-      slots: 100,
-      claimedCount: 0,
-      startTime: Date.now(),
-      deadline: Date.now() + (30 * 24 * 60 * 60 * 1000),
-      active: true,
-      holdPeriod: '1 week'
-    },
-    {
-      id: 'bounty_005',
-      title: 'Loyal Holder: $5 (1 Week)',
-      description: 'Maintain a $5 balance on X Layer for at least 7 consecutive days.',
+      title: 'Loyal Dog: 1 Week Hold',
+      description: 'Hold $XDOG tokens for at least 7 consecutive days on X Layer.',
       category: 'Loyalty',
       difficulty: 'Medium',
-      task: 'Hold $5 for 7 days',
-      minBalance: 5,
-      reward: 0.05,
+      type: 'loyalty_xdog',
+      tokenAddress: '0x0cc24c51bf89c00c5affbfcf5e856c25ecbdb48e',
+      reward: 0.02,
       slots: 50,
-      claimedCount: 0,
-      startTime: Date.now(),
-      deadline: Date.now() + (30 * 24 * 60 * 60 * 1000),
-      active: true,
-      holdPeriod: '1 week'
-    },
-    {
-      id: 'bounty_006',
-      title: 'Loyal Holder: $10 (1 Week)',
-      description: 'Maintain a $10 balance on X Layer for at least 7 consecutive days.',
-      category: 'Loyalty',
-      difficulty: 'Hard',
-      task: 'Hold $10 for 7 days',
-      minBalance: 10,
-      reward: 10.00,
-      slots: 10,
       claimedCount: 0,
       startTime: Date.now(),
       deadline: Date.now() + (30 * 24 * 60 * 60 * 1000),
@@ -103,7 +74,7 @@ const db = {
   submissions: [],
   leaderboard: [],
   
-  getBounties() { return this.bounties },
+  getBounties() { return this.bounties.filter(b => b.active) },
   getBountyById(id) { return this.bounties.find(b => b.id === id) },
   getSubmissionByWallet(walletAddress, bountyId) {
     return this.submissions.find(s => 
@@ -115,7 +86,12 @@ const db = {
   addSubmission(sub) { this.submissions.push(sub) },
   updateBountyClaim(id) {
     const bounty = this.getBountyById(id)
-    if (bounty) bounty.claimedCount += 1
+    if (bounty) {
+      bounty.claimedCount += 1
+      if (bounty.claimedCount >= bounty.slots) {
+        bounty.active = false
+      }
+    }
   },
   updateLeaderboard(walletAddress, earnedAmount) {
     const entry = this.leaderboard.find(l => l.walletAddress.toLowerCase() === walletAddress.toLowerCase())

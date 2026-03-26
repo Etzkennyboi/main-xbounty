@@ -1,7 +1,7 @@
 const express = require('express')
 const router = express.Router()
 const db = require('../config/db')
-const { verifyBalance, verifyWallet, sendPayout } = require('../agent/verify')
+const { verifyBalance, verifyWallet, verifyLoyalty, sendPayout } = require('../agent/verify')
 
 // GET all active bounties
 router.get('/bounties', (req, res) => {
@@ -49,11 +49,13 @@ router.post('/submit', async (req, res) => {
 
   try {
     let result
-    if (bounty.task === 'swap') {
+    if (bounty.type === 'swap') {
       if (!txHash) return res.status(400).json({ success: false, message: 'txHash is required for swap bounties' })
       result = await verifyWallet(walletAddress, txHash, bounty)
+    } else if (bounty.type === 'loyalty_xdog') {
+      result = await verifyLoyalty(walletAddress, bounty)
     } else {
-      // Default to balance check if task is not swap
+      // Handles both 'balance' and 'balance_xdog' in verifyBalance
       result = await verifyBalance(walletAddress, bounty)
     }
 
@@ -68,8 +70,17 @@ router.post('/submit', async (req, res) => {
     }
 
     if (result.verdict === 'PASS') {
+      // Double check slots after async verification
+      const currentBounty = db.getBountyById(bountyId)
+      if (currentBounty.claimedCount >= currentBounty.slots) {
+        return res.status(400).json({ success: false, message: 'All slots were just filled. Please try another bounty.' })
+      }
+
       // Increment claim count
       db.updateBountyClaim(bountyId)
+      
+      // Update leaderboard
+      db.updateLeaderboard(walletAddress, bounty.reward)
       
       // Trigger payout
       console.log(`PASS verdict. Sending ${bounty.reward} USDC reward to ${walletAddress}...`)
@@ -80,7 +91,7 @@ router.post('/submit', async (req, res) => {
       } else {
         submission.payoutTx = 'PAYOUT_FAILED'
         submission.error = payout.error
-        submission.message = payout.message // Add the detailed error message
+        submission.message = payout.message 
         submission.agentBalance = payout.balance
         submission.neededAmount = payout.needed
         console.error(`CRITICAL: Payout of ${bounty.reward} USDC failed. Error: ${payout.error} - ${payout.message || ''}`)

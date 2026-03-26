@@ -10,7 +10,7 @@ function App() {
   const [bounties, setBounties] = useState([])
   const [connectedAddress, setConnectedAddress] = useState(null)
   const [isConnecting, setIsConnecting] = useState(false)
-  const [activities, setActivities] = useState([])
+  const [isWrongNetwork, setIsWrongNetwork] = useState(false)
   
   const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:3001/api')
 
@@ -24,18 +24,70 @@ function App() {
       })
       .catch(err => console.error("Failed to fetch bounties: ", err))
 
-    // Fetch initial leaderboard for "Live Activity" simulation
+    // Fetch initial leaderboard for "Live Activity" (Optional)
     fetch(`${API_URL}/leaderboard`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          setActivities(data.leaderboard.slice(0, 5))
+      .catch(err => console.warn("Leaderboard simulation fetch failed"))
+
+    const switchToXLayer = async () => {
+      try {
+        await window.ethereum.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: '0xc4' }], // 196 in HEX
+        });
+        setIsWrongNetwork(false);
+      } catch (switchError) {
+        // This error code indicates that the chain has not been added to MetaMask.
+        if (switchError.code === 4902) {
+          try {
+            await window.ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [
+                {
+                  chainId: '0xc4',
+                  chainName: 'X Layer Mainnet',
+                  nativeCurrency: {
+                    name: 'OKB',
+                    symbol: 'OKB',
+                    decimals: 18,
+                  },
+                  rpcUrls: ['https://rpc.xlayer.tech'],
+                  blockExplorerUrls: ['https://www.oklink.com/xlayer'],
+                },
+              ],
+            });
+            setIsWrongNetwork(false);
+          } catch (addError) {
+            console.error('Failed to add X Layer:', addError);
+          }
         }
-      })
+        console.error('Failed to switch to X Layer:', switchError);
+      }
+    };
+
+    const checkNetwork = async () => {
+      if (window.ethereum) {
+        const chainId = await window.ethereum.request({ method: 'eth_chainId' })
+        if (chainId !== '0xc4') {
+          setIsWrongNetwork(true)
+          await switchToXLayer()
+        } else {
+          setIsWrongNetwork(false)
+        }
+      }
+    }
+
+    checkNetwork()
 
     if (window.ethereum) {
       window.ethereum.on('accountsChanged', (accounts) => {
         setConnectedAddress(accounts[0] || null)
+      })
+      window.ethereum.on('chainChanged', (chainId) => {
+        if (chainId !== '0xc4') {
+          switchToXLayer()
+        } else {
+          setIsWrongNetwork(false)
+        }
       })
     }
   }, [API_URL])
@@ -49,6 +101,13 @@ function App() {
     try {
       const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' })
       setConnectedAddress(accounts[0])
+      
+      const chainId = await window.ethereum.request({ method: 'eth_chainId' })
+      if (chainId !== '0xc4') {
+        await switchToXLayer()
+      } else {
+        setIsWrongNetwork(false)
+      }
     } catch (err) {
       console.error(err)
     } finally {
