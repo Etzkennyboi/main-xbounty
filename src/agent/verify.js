@@ -1,12 +1,8 @@
 const config = require('../config/env')
 const { ethers } = require('ethers')
-const { exec } = require('child_process')
-const util = require('util')
 const path = require('path')
 
-const execAsync = util.promisify(exec)
-
-// Prevent onchainos crashes from killing the Node.js server
+// Prevent unhandled errors from killing the Node.js server
 process.on('uncaughtException', (err) => {
   console.error('Uncaught Exception (server survived):', err.message)
 })
@@ -14,54 +10,20 @@ process.on('unhandledRejection', (err) => {
   console.error('Unhandled Rejection (server survived):', err.message || err)
 })
 
-// Determine the correct onchainos path based on host system (Windows vs Linux)
-const IS_WIN = process.platform === 'win32'
-const onchainosPath = IS_WIN 
-  ? path.join(process.env.USERPROFILE || '', '.local', 'bin', 'onchainos.exe')
-  : '/root/.local/bin/onchainos' // Default installation path in Dockerfile
-
-// Startup Check: Ensure keys are available
-if (!config.okx.apiKey || !config.okx.secretKey || !config.okx.passphrase) {
-  console.warn('⚠️ CRITICAL WARNING: OKX API credentials missing in environment!')
-}
-console.log(`📡 OnchainOS initialized on ${process.platform}. Binary path: ${onchainosPath}`)
-
 // RPC Source of Truth (Zero API Key Required)
 const provider = new ethers.JsonRpcProvider('https://rpc.xlayer.tech')
 
-async function runOnchainos(args) {
-  const env = { 
-    ...process.env,
-    OKX_API_KEY: config.okx.apiKey,
-    OKX_SECRET_KEY: config.okx.secretKey,
-    OKX_PASSPHRASE: config.okx.passphrase
-  }
+// Initialize Payout Wallet (Pure Node Implementation)
+let payoutWallet = null
+if (config.agent.payoutPrivateKey) {
   try {
-    console.log(`📡 OnchainOS [${onchainosPath}] Running args: ${args.substring(0, 100)}...`)
-    const { stdout, stderr } = await execAsync(`"${onchainosPath}" ${args}`, { env, encoding: 'utf8', timeout: 120000 })
-    const jsonStart = stdout.indexOf('{')
-    if (jsonStart === -1) return null
-    const json = JSON.parse(stdout.substring(jsonStart))
-    if (!json.ok && json.message) {
-      return { _error: json.message, _json: json }
-    }
-    return json.data
-  } catch (error) {
-    const stderrMsg = error.stderr ? error.stderr.trim() : '';
-    const stdoutMsg = error.stdout ? error.stdout.trim() : '';
-    console.error(`OnchainOS Execution Error:`, error.message)
-    if (stderrMsg) console.error(`OnchainOS Stderr:`, stderrMsg)
-    if (stdoutMsg) console.error(`OnchainOS Stdout:`, stdoutMsg)
-    
-    try {
-       const jsonStart = stdoutMsg.indexOf('{');
-       if (jsonStart !== -1) {
-          const json = JSON.parse(stdoutMsg.substring(jsonStart));
-          return { _error: json.message || stderrMsg || stdoutMsg || error.message, _json: json };
-       }
-    } catch (e) {}
-    return { _error: stderrMsg || stdoutMsg || error.message }
+    payoutWallet = new ethers.Wallet(config.agent.payoutPrivateKey, provider)
+    console.log(`📡 Payout Wallet Initialized: ${payoutWallet.address} (Ready on X Layer)`)
+  } catch (err) {
+    console.error('⚠️ CRITICAL: Failed to initialize Payout Wallet. Incorrect PRIVATE_KEY?')
   }
+} else {
+  console.warn('⚠️ WARNING: PAYOUT_PRIVATE_KEY is missing. Automated rewards will NOT work!')
 }
 
 // FETCH EXACT TX DATA VIA RPC (The AI's "Eyes")
@@ -97,7 +59,6 @@ async function getTxData(txHash) {
             tokenAddr: log.address,
             from: parsed.args[0],
             to: parsed.args[1],
-            // Only capturing generic values to show token movement
           })
         }
       } catch (e) {
@@ -110,7 +71,7 @@ async function getTxData(txHash) {
       from: tx.from,
       to: tx.to,
       isContractCall: isContract,
-      inputDataPrefix: tx.data.substring(0, 10), // Helps AI identify function calls
+      inputDataPrefix: tx.data.substring(0, 10),
       timestamp: block.timestamp * 1000,
       timestampStr: new Date(block.timestamp * 1000).toLocaleString(),
       status: receipt.status === 1 ? 'SUCCESS' : 'FAILED',
@@ -164,7 +125,7 @@ ANALYSIS INSTRUCTIONS:
 5. The transaction Status MUST be SUCCESS.
 6. The Time MUST be AFTER ${new Date(bounty.startTime).toLocaleString()}
 
-Does this blockchain evidence prove a valid ${bounty.type} was executed by or on behalf of the CLAIMING WALLET (${walletAddress})?
+Does this blockchain evidence prove a valid DEX Swap was executed by or on behalf of the CLAIMING WALLET (${walletAddress})?
 Reply with EXACTLY:
 VERDICT: PASS
 or
@@ -208,15 +169,11 @@ async function verifyWallet(walletAddress, txHash, bounty) {
   console.log(`\nStarting Verification for Wallet: ${walletAddress}`)
   console.log(`Submitted TX Hash: ${txHash}`)
 
-  // 1. Fetch exact blockchain evidence first
   const txData = await getTxData(txHash)
-  
   if (!txData) {
     return { verdict: 'FAIL', reason: 'Could not find that transaction hash on the X Layer blockchain.' }
   }
 
-  // 2. STRICTURE OWNERSHIP CHECK (Before AI)
-  // Ensure the wallet is either the sender OR mentioned in the ERC20 logs
   const walletLower = walletAddress.toLowerCase()
   const isSender = txData.from.toLowerCase() === walletLower
   const isInLogs = txData.transfers.some(t => 
@@ -230,39 +187,34 @@ async function verifyWallet(walletAddress, txHash, bounty) {
     }
   }
 
-  // 3. Validate time constraint mechanically
   if (txData.timestamp < bounty.startTime) {
     return { verdict: 'FAIL', reason: `Transaction occurred before the bounty start time.` }
   }
 
-  // 4. Delegate the final complex swap analysis to DeepSeek
   return await askDeepSeekToVerify(walletAddress, bounty, txData)
 }
 
-async function getTokenPrice(tokenAddress) {
-  try {
-    // GeckoTerminal for X Layer
-    const response = await fetch(`https://api.geckoterminal.com/api/v2/networks/x-layer/tokens/${tokenAddress}`)
-    const data = await response.json()
-    if (data && data.data && data.data.attributes) {
-      return parseFloat(data.data.attributes.price_usd)
-    }
-  } catch (err) {
-    console.warn(`Could not fetch price for ${tokenAddress}:`, err.message)
-  }
-  return null
-}
-
-// ── BALANCE VERIFICATION (for "Hold $1" and "$XDOG" bounties) ──────────────────────
+// ── BALANCE VERIFICATION (for "Hold $1" bounty) ──────────────────────
 async function verifyBalance(walletAddress, bounty) {
   console.log(`\n💰 Verifying X Layer portfolio for: ${walletAddress}`)
   const usdcAddress = "0x74b7f16337b8972027f6196a17a631ac6de26d22"
   const xdogAddress = "0x0cc24c51bf89c00c5affbfcf5e856c25ecbdb48e"
   
   try {
-    // 1. Fetch native OKB balance
     const nativeBalanceWei = await provider.getBalance(walletAddress)
     const nativeBalance = parseFloat(ethers.formatEther(nativeBalanceWei))
+    
+    // 2. Fetch USDC balance (ERC-20)
+    const usdcContract = new ethers.Contract(usdcAddress, ['function balance(address) view returns (uint256)', 'function decimals() view returns (uint8)'], provider)
+    // Note: OKX USDC on X Layer uses standard ERC20 balance/decimals but we check standard format
+    const usdcBalanceRaw = await provider.call({
+       to: usdcAddress,
+       data: '0x70a08231' + walletAddress.substring(2).padStart(64, '0') // balanceOf(address)
+    });
+    
+    const usdcBalance = parseFloat(ethers.formatUnits(usdcBalanceRaw, 6)) // USDC on X Layer is 6 decimals
+    
+    // 3. Simple price estimation ($85 for OKB, $1 for USDC)
     const okbPrice = 85 
 
     // 2. Fetch specific token if bounty requires it
@@ -291,109 +243,64 @@ async function verifyBalance(walletAddress, bounty) {
     console.log(`  ${tokenDetails}`)
     console.log(`  Estimated Total X Layer Value: ~$${totalValueUsd.toFixed(2)}`)
 
-    if (totalValueUsd >= (bounty.minBalance || bounty.minUsd || 1)) {
+    if (totalValueUsd >= (bounty.minBalance || 1)) {
       return {
         verdict: 'PASS',
-        reason: `Wallet verified with ${tokenDetails}. Requirement met.`
+        reason: `Wallet verified with a total X Layer value of ~$${totalValueUsd.toFixed(2)}. Requirement met.`
       }
     } else {
       return {
         verdict: 'FAIL',
-        reason: `Wallet only holds ${tokenDetails}. Minimum $${bounty.minBalance || bounty.minUsd || 1} required.`
+        reason: `Wallet only holds ~$${totalValueUsd.toFixed(2)} on X Layer (native OKB + USDC). Minimum $${bounty.minBalance || 1} required.`
       }
     }
   } catch (err) {
     console.error('RPC Portfolio Verification error:', err.message)
-    return { verdict: 'FAIL', reason: 'Direct blockchain query failed. Please ensure wallet has activity.' }
-  }
-}
-
-// ── LOYALTY VERIFICATION (for 1 Week Hold) ──────────────────────────────────
-async function verifyLoyalty(walletAddress, bounty) {
-  console.log(`\n💎 Verifying Loyalty (Hold for a week) for: ${walletAddress}`)
-  const xdogAddress = bounty.tokenAddress || "0x0cc24c51bf89c00c5affbfcf5e856c25ecbdb48e"
-  const dayInMs = 24 * 60 * 60 * 1000
-  const sevenDaysAgo = Date.now() - (7 * dayInMs)
-
-  try {
-    // 1. First, check if they actually hold it NOW
-    const xdogContract = new ethers.Contract(xdogAddress, ['function balanceOf(address) view returns (uint256)', 'event Transfer(address indexed from, address indexed to, uint256 value)'], provider)
-    const currentBalance = await xdogContract.balanceOf(walletAddress)
-    
-    if (currentBalance === 0n) {
-      return { verdict: 'FAIL', reason: 'You currently hold zero $XDOG tokens. You must hold tokens for at least a week.' }
-    }
-
-    // 2. Scan for ANY outflows (Transfer FROM) in the last 7 days
-    // Note: In a real app we'd use an indexer. Here we search logs with a filter.
-    const filter = xdogContract.filters.Transfer(walletAddress)
-    const currentBlock = await provider.getBlockNumber()
-    // Approx 2 seconds per block on X Layer = ~302400 blocks for 7 days
-    const fromBlock = currentBlock - 302400
-    
-    const logs = await xdogContract.queryFilter(filter, fromBlock > 0 ? fromBlock : 0)
-    
-    if (logs.length > 0) {
-      // They sold or moved tokens in the last week
-      return { 
-        verdict: 'FAIL', 
-        reason: `Loyalty broken: You moved or sold $XDOG tokens in the last 7 days. Bounty requires proof of holding.` 
-      }
-    }
-
-    return {
-      verdict: 'PASS',
-      reason: 'Loyalty verified: No outflows found in the last week. Diamond hands confirmed!'
-    }
-
-  } catch (err) {
-    console.error('Loyalty Verification error:', err.message)
-    return { verdict: 'FAIL', reason: 'Could not verify loyalty window onchain. Please ensure wallet has activity.' }
+    return { verdict: 'FAIL', reason: 'Direct blockchain query failed. Ensure the wallet address is valid and has activity on X Layer Mainnet.' }
   }
 }
 
 async function sendPayout(walletAddress, amount) {
   const usdcAddress = "0x74b7f16337b8972027f6196a17a631ac6de26d22" // X Layer Mainnet USDC
-  const agentAddress = "0x1eF1034E7Cd690B40A329bd64209Ce563F95Bb5c"
-  const okxBaseUrl = "https://www.okx.com/"
-
+  const agentAddress = "0x1ef1034e7cd690b40a329bd64209ce563f95bb5c"
+  
   try {
-    // 1. Initial check: Does agent have enough USDC? 
-    console.log(`📡 Checking Payout Agent Wallet (${agentAddress}) balance...`)
+    // 1. Initial check: Does agent have enough USDC? Use direct RPC to be session-independent
+    console.log(`📡 Checking Agent Wallet (${agentAddress}) balance for payout...`)
     
     const usdcContract = new ethers.Contract(usdcAddress, [
       'function balanceOf(address) view returns (uint256)',
-      'function decimals() view returns (uint8)'
-    ], provider)
+      'function transfer(address to, uint256 value) returns (bool)'
+    ], payoutWallet)
 
     const agentBalanceRaw = await usdcContract.balanceOf(agentAddress)
-    const agentBalance = parseFloat(ethers.formatUnits(agentBalanceRaw, 6)) // USDC is 6 decimals
+    const agentBalance = parseFloat(ethers.formatUnits(agentBalanceRaw, 6))
     
-    console.log(`   Agent Balance: ${agentBalance} USDC`)
+    console.log(`   Balance: ${agentBalance} USDC`)
 
     if (agentBalance < parseFloat(amount)) {
-      console.error(`INSUFFICIENT FUNDS: Agent has ${agentBalance} USDC, but reward is ${amount} USDC.`);
+      console.error(`INSUFFICIENT FUNDS: Agent has ${agentBalance} USDC, but this reward requires ${amount} USDC.`);
       return { success: false, error: 'INSUFFICIENT_FUNDS', balance: agentBalance, needed: amount }
     }
 
-    // 2. Perform Send via OnchainOS with fixed Base URL for DNS
-    console.log(`📡 Executing payout from ${agentAddress} via OnchainOS CLI...`)
-    const result = await runOnchainos(`wallet send --base-url "${okxBaseUrl}" --chain 196 --amount "${amount}" --receipt "${walletAddress}" --contract-token "${usdcAddress}" --from "${agentAddress}" --force`)
+    // 2. Perform Send
+    console.log(`Executing payout: onchainos wallet send --chain 196 --amt "${amount}" --receipt "${walletAddress}" --contract-token "${usdcAddress}" --from "${agentAddress}" --force`)
+    const result = await runOnchainos(`wallet send --chain 196 --amt "${amount}" --receipt "${walletAddress}" --contract-token "${usdcAddress}" --from "${agentAddress}" --force`)
     
     if (result && result.txHash) {
-      console.log(`✅ Payout Successful! Hash: ${result.txHash}`)
       return { success: true, txHash: result.txHash }
     }
     
+    // Explicitly check for simulation/execution error from runOnchainos
     if (result && result._error) {
-       console.error(`❌ PAYOUT REVERTED: ${result._error}`);
+       console.error(`PAYOUT REVERTED: ${result._error}`);
        return { success: false, error: 'PAYOUT_ERROR', message: result._error };
     }
     
     return { success: false, error: 'PAYOUT_ERROR', message: 'Unknown error during execution' }
   } catch (err) {
     console.error('Payout process crashed:', err.message)
-    return { success: false, error: 'SYSTEM_ERROR', message: err.message }
+    return { success: false, error: 'SYSTEM_ERROR' }
   }
 }
 
